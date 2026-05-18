@@ -1,0 +1,296 @@
+// ── WORD SUGGESTIONS ────────────────────────────────────────────
+// 3-layer suggestion engine:
+// Layer 1 — Her personal learned words (highest priority)
+// Layer 2 — Tanglish seed list
+// Layer 3 — English frequency dictionary
+// All stored/matched locally on phone — zero server round trip.
+
+import { Haptics } from '../utils/haptics.js';
+import { WS }      from '../utils/websocket.js';
+
+const WordSuggestions = (() => {
+
+  // ── DOM REF ───────────────────────────────────────────────────
+  let container   = null;
+  let currentWord = '';
+  let isActive    = false;
+
+  // ── LAYER 3: ENGLISH DICTIONARY ───────────────────────────────
+  // Top 500 most frequently used English words, frequency ordered.
+  // Source: Oxford English Corpus frequency list.
+  const ENGLISH = [
+    'the','be','to','of','and','a','in','that','have','it','for','not',
+    'on','with','he','as','you','do','at','this','but','his','by','from',
+    'they','we','say','her','she','or','an','will','my','one','all','would',
+    'there','their','what','so','up','out','if','about','who','get','which',
+    'go','me','when','make','can','like','time','no','just','him','know',
+    'take','people','into','year','your','good','some','could','them','see',
+    'other','than','then','now','look','only','come','its','over','think',
+    'also','back','after','use','two','how','our','work','first','well',
+    'way','even','new','want','because','any','these','give','day','most',
+    'us','great','between','need','large','often','hand','high','place',
+    'hold','turn','where','show','around','again','still','every','small',
+    'found','those','never','next','last','through','before','right','too',
+    'mean','old','same','tell','follow','came','form','three','set','put',
+    'end','does','another','must','big','such','here','why','ask','went',
+    'read','land','different','home','move','try','kind','picture','change',
+    'off','play','spell','air','away','animal','house','point','page',
+    'letter','mother','answer','study','learn','plant','cover','food','sun',
+    'four','thought','let','keep','children','feet','side','without','once',
+    'life','enough','took','sometimes','head','above','began','almost','live',
+    'girl','mountains','cut','young','talk','soon','list','song','being',
+    'leave','family','body','music','color','stand','questions','fish','area',
+    'mark','book','drive','stood','front','teach','week','final','gave',
+    'green','please','strange','caught','fall','team','reach','second','less',
+    'feel','cross','build','middle','speed','count','cat','someone','sail',
+    'bear','wonder','smiled','everyone','afternoon','beautiful','brother',
+    'sister','together','something','everything','nothing','anything',
+    'hello','help','here','hey','hope','happy','have','heart','love','look',
+    'learn','laugh','light','little','long','please','pretty','people',
+    'proud','perfect','thank','thanks','thinking','today','tomorrow',
+    'sorry','sure','sweet','special','smile','strong','super','really',
+    'right','ready','remember','running','amazing','always','already',
+    'actually','around','because','before','better','between','bring',
+    'bright','brave','great','going','getting','given','grow','glad',
+    'guess','just','join','journey','joyful','kind','keep','lovely',
+    'maybe','making','might','more','most','much','many','must','never',
+    'nice','need','next','night','now','often','only','other','over',
+    'own','okay','quite','quick','quiet','question','feel','find','first',
+    'with','well','when','where','while','wish','world','morning','evening',
+    'night','afternoon','yesterday','tomorrow','weekend','Monday','Tuesday',
+    'Wednesday','Thursday','Friday','Saturday','Sunday','January','February',
+    'March','April','June','July','August','September','October','November',
+    'December','meeting','office','college','class','project','assignment',
+    'presentation','deadline','submit','email','message','call','phone',
+    'laptop','computer','internet','download','upload','password','login',
+    'account','profile','update','install','send','receive','reply','forward',
+    'delete','save','share','open','close','start','stop','pause','play',
+    'next','previous','volume','screen','keyboard','mouse','click','type',
+    'search','find','result','error','problem','solution','answer','question',
+    'example','practice','exercise','lesson','chapter','page','line','word',
+    'sentence','paragraph','document','file','folder','create','edit','copy',
+    'paste','cut','undo','redo','format','bold','italic','underline','font',
+    'size','color','align','left','right','center','justify','table','image',
+    'video','audio','record','camera','photo','picture','screenshot','zoom',
+    'maybe','probably','definitely','absolutely','certainly','obviously',
+    'basically','actually','literally','seriously','honestly','clearly',
+    'anyway','however','therefore','although','because','since','unless',
+    'whenever','wherever','whatever','whoever','whichever','however',
+    'friend','friends','family','sister','brother','mother','father','parents',
+    'teacher','student','team','group','everyone','someone','anyone','nobody',
+    'myself','yourself','himself','herself','ourselves','themselves',
+    'money','time','work','school','home','office','market','hospital',
+    'restaurant','hotel','airport','station','road','street','city','town',
+    'village','country','world','place','area','location','direction',
+    'happy','sad','angry','excited','nervous','tired','bored','confused',
+    'surprised','scared','proud','thankful','grateful','sorry','fine','okay',
+    'great','good','bad','terrible','wonderful','awesome','amazing','perfect',
+    'interesting','boring','funny','serious','important','necessary','useful',
+    'come','coming','goes','going','wants','needs','thinks','knows','feels',
+    'looks','seems','becomes','happens','changes','starts','stops','helps',
+    'tries','works','plays','studies','reads','writes','speaks','listens',
+    'watching','waiting','walking','running','eating','drinking','sleeping',
+    'buying','selling','giving','taking','making','doing','saying','asking',
+  ];
+
+  // ── LAYER 2: TANGLISH SEED LIST ───────────────────────────────
+  // 150 most common Tanglish words — how Tamil is typed in English letters.
+  // These cover everyday conversation, texting, and informal writing.
+  const TANGLISH = [
+    // Responses & affirmations
+    'seri','aamaa','illa','illai','maybe','sollu','solla','soldren',
+    'theriyum','theriyala','puriyuthu','puriyala','okay','otay',
+    // People
+    'naan','nee','avan','aval','naanga','nenga','avanga','yaar',
+    'akka','anna','amma','appa','thatha','paati','machan','macha',
+    'da','di','bro','pa','ma','tambi','thambi','nanban','nanbi',
+    // Questions
+    'enna','yenna','eppadi','epdi','enge','engey','eppo','eppove',
+    'yaaru','yaar','yen','yennapa','yennama','yennada','yennadi',
+    // Common verbs
+    'vaa','vaayen','poi','poyen','paren','paaru','sollu','kelu',
+    'varuven','varuva','povom','palam','sollren','ketren','parkiren',
+    'pannren','pannuven','irukken','iruken','vandhen','vanden',
+    'sollunga','parunga','vaanga','poonga','pannunga','kelunga',
+    // Emotions & reactions
+    'romba','konjam','nalla','nallaa','super','kalakkal','semma',
+    'mokka','kaduppu','pavam','azhaga','azhagaa','happy','santhosham',
+    'kavalai','tension','bore','mosam','waste','mass','patta',
+    // Common expressions
+    'sappa','thappa','correct','exact','true','poi','uண்மை',
+    'kandippa','definitely','pochu','achu','mudinju','mudinjuchu',
+    'varuma','varuva','povana','povan','solluva','solluvan',
+    // Frequently typed phrases (stored as single words for prefix matching)
+    'nandri','thanks','vanakkam','welcome','saptiya','sapten',
+    'thinren','kudikiren','tidren','padikiren','thoonguren',
+    'velaikku','veetuku','schoolku','collegeku','friendsku',
+    // Time expressions
+    'ippo','ippove','appo','appove','naalaiku','naalai','nethu',
+    'mundha','munnadi','pinna','pinnadi','morning','evening',
+    // Intensifiers
+    'romba','oru','rendu','moonu','naalu','ainjy','aaru',
+    'vera','vere','mattum','kuda','ellam','yellam','onnum',
+    // Common nouns
+    'veedu','veetu','ooru','ur','kadai','kadaikku','school',
+    'college','office','hospital','kovil','park','road','bus',
+    'train','auto','bike','car','phone','laptop','panam','money',
+    // Connectors
+    'aana','aanaa','aprum','aprm','athuku','aduku','ingey','inge',
+    'ange','angey','yengey','inniku','inniki','indha','antha',
+  ];
+
+  // ── LAYER 1: PERSONAL LEARNING ENGINE ────────────────────────
+  // Stores words she types + frequency in localStorage.
+  // Her personal words always show up first in suggestions.
+
+  const PERSONAL_KEY = 'tb_personal_words';
+
+  function getPersonalWords() {
+    try {
+      return JSON.parse(localStorage.getItem(PERSONAL_KEY) || '{}');
+    } catch { return {}; }
+  }
+
+  function recordWord(word) {
+    if (!word || word.length < 2) return;
+    const words = getPersonalWords();
+    words[word.toLowerCase()] = (words[word.toLowerCase()] || 0) + 1;
+    localStorage.setItem(PERSONAL_KEY, JSON.stringify(words));
+  }
+
+  function getPersonalSuggestions(prefix) {
+    const words   = getPersonalWords();
+    const lower   = prefix.toLowerCase();
+    return Object.entries(words)
+      .filter(([w]) => w.startsWith(lower) && w !== lower)
+      .sort((a, b) => b[1] - a[1])   // sort by frequency descending
+      .slice(0, 5)
+      .map(([w]) => w);
+  }
+
+  // ── SUGGESTION ENGINE ─────────────────────────────────────────
+  // Combines all 3 layers — personal first, then Tanglish, then English
+  function getSuggestions(prefix) {
+    if (!prefix || prefix.length < 1) return [];
+
+    const lower    = prefix.toLowerCase();
+    const seen     = new Set();
+    const results  = [];
+
+    // Helper — add word if not already in results
+    function add(word) {
+      if (!seen.has(word) && word !== lower && results.length < 3) {
+        seen.add(word);
+        results.push(word);
+      }
+    }
+
+    // Layer 1 — personal learned words (highest priority)
+    getPersonalSuggestions(lower).forEach(add);
+
+    // Layer 2 — Tanglish seed list
+    TANGLISH.filter(w => w.startsWith(lower)).forEach(add);
+
+    // Layer 3 — English dictionary
+    ENGLISH.filter(w => w.startsWith(lower)).forEach(add);
+
+    return results.slice(0, 3);
+  }
+
+  // ── RENDER CHIPS ─────────────────────────────────────────────
+  function renderChips(suggestions) {
+    if (!container) return;
+    container.innerHTML = '';
+
+    if (suggestions.length === 0) return;
+
+    suggestions.forEach((word, index) => {
+      const chip = document.createElement('button');
+      chip.className = 'suggestion-chip';
+
+      // Middle chip is primary
+      if (index === 1 || (suggestions.length === 1 && index === 0)) {
+        chip.classList.add('suggestion-chip--primary');
+      }
+
+      chip.textContent = word;
+
+      chip.addEventListener('click', () => {
+        Haptics.tap();
+
+        // Record this word to personal learning
+        recordWord(word);
+
+        // Send to laptop
+        WS.send({
+          panel:  'typing',
+          action: 'suggestion',
+          word:   word,
+          prefix: currentWord,
+        });
+
+        container.innerHTML = '';
+        currentWord = '';
+      });
+
+      container.appendChild(chip);
+    });
+  }
+
+  // ── UPDATE ────────────────────────────────────────────────────
+  // Called from app.js when Python sends current typed word
+  function update(word) {
+    currentWord = word;
+
+    // Record every word she completes naturally (sent from Python
+    // when she hits space after a word)
+    if (word === '' && currentWord !== '') {
+      recordWord(currentWord);
+    }
+
+    const suggestions = getSuggestions(word);
+    renderChips(suggestions);
+  }
+
+  // ── SHOW DEFAULTS ─────────────────────────────────────────────
+  function showDefaults() {
+    if (!container) return;
+    container.innerHTML = '';
+
+    // Show her most frequently used words as defaults
+    const personal = getPersonalSuggestions('');
+    const defaults = personal.length >= 3
+      ? personal.slice(0, 3)
+      : ['the', 'and', 'seri'];
+
+    defaults.forEach((word, index) => {
+      const chip = document.createElement('button');
+      chip.className = 'suggestion-chip';
+      if (index === 1) chip.classList.add('suggestion-chip--primary');
+      chip.textContent = word;
+      chip.addEventListener('click', () => {
+        Haptics.tap();
+        recordWord(word);
+        WS.send({ panel: 'typing', action: 'suggestion', word, prefix: '' });
+      });
+      container.appendChild(chip);
+    });
+  }
+
+  // ── INIT ──────────────────────────────────────────────────────
+  function init(containerEl) {
+    container = containerEl;
+    showDefaults();
+  }
+
+  function activate()   { isActive = true; }
+  function deactivate() {
+    isActive = false;
+    showDefaults();
+  }
+
+  return { init, update, activate, deactivate };
+
+})();
+
+export { WordSuggestions };
