@@ -19,7 +19,7 @@ HTTP_PORT = int(os.getenv("HTTP_PORT", 8080))
 # ── SPOTIFY SETTINGS ──────────────────────────────────────────
 SPOTIFY_CLIENT_ID     = os.getenv("SPOTIFY_CLIENT_ID", "")
 SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET", "")
-SPOTIFY_REDIRECT_URI  = os.getenv("SPOTIFY_REDIRECT_URI", "http://localhost:8888/callback")
+SPOTIFY_REDIRECT_URI  = os.getenv("SPOTIFY_REDIRECT_URI", "http://127.0.0.1:8888/callback")
 
 # ── APP DETECTOR SETTINGS ─────────────────────────────────────
 # How often to check which app is active (milliseconds)

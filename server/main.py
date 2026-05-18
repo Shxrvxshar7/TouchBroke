@@ -10,7 +10,6 @@ import socket
 import threading
 import logging
 import http.server
-import functools
 import os
 import sys
 
@@ -24,12 +23,8 @@ log = logging.getLogger("TouchBroke")
 
 
 # ── GET LOCAL IP ──────────────────────────────────────────────
-# Finds the machine's LAN IP address (e.g. 192.168.1.5)
-# This is what the phone types into Chrome
 def get_local_ip():
     try:
-        # Connect to a public IP (doesn't actually send data)
-        # just to find which network interface is used
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.connect(("8.8.8.8", 80))
         ip = s.getsockname()[0]
@@ -40,15 +35,12 @@ def get_local_ip():
 
 
 # ── HTTP SERVER ───────────────────────────────────────────────
-# Serves the client/ folder so the phone can load the Touch Bar UI.
-# When phone opens http://192.168.x.x:8080 — this responds.
 def start_http_server():
-    import os
     os.chdir(str(CLIENT_DIR))
 
     class QuietHandler(http.server.SimpleHTTPRequestHandler):
         def log_message(self, format, *args):
-            pass  # silence default logs
+            pass
 
     server = http.server.HTTPServer(("0.0.0.0", HTTP_PORT), QuietHandler)
     log.info(f"✓ HTTP server serving {CLIENT_DIR} on port {HTTP_PORT}")
@@ -56,9 +48,6 @@ def start_http_server():
 
 
 # ── APP DETECTOR ──────────────────────────────────────────────
-# Starts the app detector in a background thread.
-# It checks the active Windows app every 500ms and sends
-# app_change events to the phone when the app switches.
 def start_app_detector():
     from app_detector import AppDetector
     detector = AppDetector()
@@ -81,16 +70,31 @@ def print_banner(ip):
     print()
 
 
+# ── SPOTIFY INIT ──────────────────────────────────────────────
+def init_spotify():
+    try:
+        from actions.spotify import init as spotify_init
+        log.info("Initialising Spotify...")
+        authenticated = spotify_init()
+        if authenticated:
+            log.info("✓ Spotify ready")
+        else:
+            log.warning("Spotify not authenticated — Now Playing disabled")
+        return authenticated
+    except Exception as e:
+        log.error(f"Spotify init error: {e}")
+        return False
+
+
 # ── MAIN ──────────────────────────────────────────────────────
 async def main():
     ip = get_local_ip()
     print_banner(ip)
 
     # Start HTTP server in background thread
-    # (it's not async so it runs in its own thread)
     http_thread = threading.Thread(
         target=start_http_server,
-        daemon=True  # dies when main program exits
+        daemon=True
     )
     http_thread.start()
 
@@ -101,8 +105,34 @@ async def main():
     )
     detector_thread.start()
 
-    # Start WebSocket server — this runs forever on the main thread
+    # Init Spotify in background thread (OAuth may open browser)
+    spotify_thread = threading.Thread(
+        target=init_spotify,
+        daemon=True
+    )
+    spotify_thread.start()
+
+    # Start Spotify polling once WebSocket is ready
+    # Runs as asyncio background task
+    asyncio.create_task(start_spotify_polling())
+
+    # Start WebSocket server — runs forever
     await start_server()
+
+
+# ── SPOTIFY POLLING TASK ──────────────────────────────────────
+async def start_spotify_polling():
+    # Wait for Spotify to authenticate (max 60s)
+    from actions.spotify import token_data, start_polling
+    from websocket_server import send_to_phone
+
+    for _ in range(60):
+        if token_data["access_token"]:
+            await start_polling(send_to_phone)
+            return
+        await asyncio.sleep(1)
+
+    log.warning("Spotify polling never started — no token after 60s")
 
 
 if __name__ == "__main__":
