@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#000000" />
+  <title>TouchBroke</title>
+
+  <!-- Lucide Icons — thin stroke, Apple SF Symbols equivalent -->
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+
+  <!-- anime.js — spring physics for Dynamic Island animations -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js"></script>
+
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+
+  <!-- Connection status dot — top right corner -->
+  <div id="connection-status" class="status-dot status-dot--disconnected"></div>
+
+  <!-- Main Touch Bar — 3 rows -->
+  <div id="touchbar">
+
+    <!-- ROW 1: Smart Bar — word suggestions, lyrics, slide strip, file context -->
+    <div id="row1" class="row row--smart">
+      <div class="row__left"  id="row1-left"></div>
+      <div class="row__center" id="row1-center"></div>
+      <div class="row__right" id="row1-right"></div>
+    </div>
+
+    <div class="row-separator"></div>
+
+    <!-- ROW 2: App Actions — swaps completely when active app changes -->
+    <div id="row2" class="row row--actions">
+      <div class="row__left"  id="row2-left">
+        <div class="app-icon-badge" id="app-icon">
+          <i data-lucide="layout-grid" class="icon"></i>
+        </div>
+      </div>
+      <div class="row__center" id="row2-center"></div>
+      <div class="row__right"  id="row2-right"></div>
+    </div>
+
+    <div class="row-separator"></div>
+
+    <!-- ROW 3: System Strip — always visible, never changes -->
+    <div id="row3" class="row row--system">
+
+      <!-- Now Playing pill — left side -->
+      <div id="now-playing-pill" class="now-playing-pill">
+        <div class="pill__art" id="pill-art"></div>
+        <span class="pill__title" id="pill-title">Not Playing</span>
+        <div class="pill__controls">
+          <button class="pill__btn" data-action="play_pause">
+            <i data-lucide="play" class="icon icon--sm"></i>
+          </button>
+          <button class="pill__btn" data-action="next_track">
+            <i data-lucide="skip-forward" class="icon icon--sm"></i>
+          </button>
+        </div>
+      </div>
+
+      <div class="system-divider"></div>
+
+      <!-- Volume, Brightness, Mute -->
+      <div class="system-controls">
+        <button class="sys-btn" id="btn-volume" data-control="volume">
+          <i data-lucide="volume-2" class="icon"></i>
+        </button>
+        <button class="sys-btn" id="btn-brightness" data-control="brightness">
+          <i data-lucide="sun" class="icon"></i>
+        </button>
+        <button class="sys-btn" id="btn-mute" data-action="mute">
+          <i data-lucide="volume-x" class="icon"></i>
+        </button>
+      </div>
+
+      <div class="system-divider"></div>
+
+      <!-- Emoji + Screenshot -->
+      <div class="system-controls">
+        <button class="sys-btn" id="btn-emoji">
+          <i data-lucide="smile" class="icon"></i>
+        </button>
+        <button class="sys-btn" data-action="screenshot">
+          <i data-lucide="camera" class="icon"></i>
+        </button>
+      </div>
+
+      <div class="system-divider"></div>
+
+      <!-- Clock -->
+      <div class="clock" id="clock">12:00</div>
+
+    </div>
+
+  </div>
+
+  <!-- Slider well — slides up over Row 3 for volume/brightness -->
+  <div id="slider-well" class="slider-well hidden">
+    <button class="slider-well__icon" id="slider-icon">
+      <i data-lucide="volume-2" class="icon"></i>
+    </button>
+    <div class="slider-track" id="slider-track">
+      <div class="slider-fill"  id="slider-fill"></div>
+      <div class="slider-thumb" id="slider-thumb"></div>
+    </div>
+    <span class="slider-value" id="slider-value">50%</span>
+    <button class="slider-well__close" id="slider-close">
+      <i data-lucide="x" class="icon icon--sm"></i>
+    </button>
+  </div>
+
+  <!-- Emoji well — slides up over Rows 2+3 -->
+  <div id="emoji-well" class="emoji-well hidden">
+    <div class="emoji-categories" id="emoji-categories"></div>
+    <div class="emoji-grid"       id="emoji-grid"></div>
+  </div>
+
+  <!-- Ambient mode overlay — shown after 5min idle -->
+  <div id="ambient-overlay" class="ambient-overlay">
+    <div class="ambient-clock" id="ambient-clock">12:00</div>
+    <div class="ambient-date"  id="ambient-date">Monday, May 18</div>
+  </div>
+
+  <!-- Onboarding — shown only in portrait mode -->
+  <div id="onboarding" class="onboarding">
+    <div class="onboarding__icon">📱</div>
+    <div class="onboarding__title">Rotate your phone</div>
+    <div class="onboarding__sub">TouchBroke works in landscape</div>
+  </div>
+
+  <!-- Entry point — type="module" enables import/export between JS files -->
+  <script type="module" src="app.js"></script>
+
+</body>
+</html>
