@@ -43,14 +43,10 @@ def get_local_ip():
 # Serves the client/ folder so the phone can load the Touch Bar UI.
 # When phone opens http://192.168.x.x:8080 — this responds.
 def start_http_server():
-    # Change to client directory so files are served from there
-    handler = functools.partial(
-        http.server.SimpleHTTPRequestHandler,
-        directory=str(CLIENT_DIR)
-    )
+    import os
+    os.chdir(str(CLIENT_DIR))
 
-    # Suppress default HTTP server request logs (too noisy)
-    class QuietHandler(handler):
+    class QuietHandler(http.server.SimpleHTTPRequestHandler):
         def log_message(self, format, *args):
             pass  # silence default logs
 
