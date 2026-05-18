@@ -293,7 +293,7 @@ async def handle_spotify_action(action, value=None):
 
     elif action == "prev_track":
         spotify_post("previous")
-
+    #changed the bug for on and off
     elif action == "shuffle":
         try:
             # Get current playback state
@@ -327,6 +327,7 @@ async def handle_spotify_action(action, value=None):
                 log.info(f"Repeat toggled → {new_state}")
         except Exception as e:
             log.error(f"Repeat error: {e}")
+
 
     elif action == "seek" and value is not None:
         spotify_put(f"seek?position_ms={int(value)}")
