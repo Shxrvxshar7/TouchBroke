@@ -240,6 +240,46 @@ const NowPlaying = (() => {
     if (expandedEl) expandedEl.classList.remove('visible');
     pillTitle.classList.add('pill__title--playing');
 
+    // Add volume and brightness buttons to Row 3 right side
+    // so they're accessible even when Now Playing takes over
+    const existing = document.getElementById('np-sys-controls');
+    if (!existing) {
+      const sysControls = document.createElement('div');
+      sysControls.id = 'np-sys-controls';
+      sysControls.style.cssText = `
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        flex-shrink: 0;
+        margin-left: auto;
+        padding-right: 8px;
+      `;
+      sysControls.innerHTML = `
+        <button class="sys-btn" id="np-btn-volume">
+          <i data-lucide="volume-2" class="icon"></i>
+        </button>
+        <button class="sys-btn" id="np-btn-brightness">
+          <i data-lucide="sun" class="icon"></i>
+        </button>
+        <button class="sys-btn" id="np-btn-mute">
+          <i data-lucide="volume-x" class="icon"></i>
+        </button>
+      `;
+      row3.appendChild(sysControls);
+      if (window.lucide) window.lucide.createIcons();
+
+      // Wire up the buttons
+      sysControls.querySelector('#np-btn-volume').addEventListener('click', () => {
+        document.getElementById('btn-volume').click();
+      });
+      sysControls.querySelector('#np-btn-brightness').addEventListener('click', () => {
+        document.getElementById('btn-brightness').click();
+      });
+      sysControls.querySelector('#np-btn-mute').addEventListener('click', () => {
+        document.getElementById('btn-mute').click();
+      });
+    }
+
     // Pulse animation on new song
     anime({
       targets: pill,

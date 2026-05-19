@@ -222,16 +222,13 @@ function switchApp(appName) {
 function loadPanel(appName) {
   const PanelClass = PANEL_MAP[appName] || DefaultPanel;
 
-  // Fade out current content
   DOM.row2Center.style.opacity = '0';
   DOM.row1Center.style.opacity = '0';
 
   setTimeout(() => {
-    // Clear both rows
     DOM.row2Center.innerHTML = '';
     DOM.row1Center.innerHTML = '';
 
-    // Mount new panel
     AppState.activePanel = new PanelClass({
       row1: DOM.row1Center,
       row2: DOM.row2Center,
@@ -240,18 +237,20 @@ function loadPanel(appName) {
 
     AppState.activePanel.mount();
 
-    // Add entrance animation
+    // Always show word suggestions in Row 1
+    // unless the panel has its own Row 1 content
+    if (!DOM.row1Center.hasChildNodes()) {
+      WordSuggestions.init(DOM.row1Center);
+    }
+
     DOM.row2Center.classList.add('panel-enter');
     DOM.row1Center.classList.add('panel-enter');
 
-    // Fade back in
     DOM.row2Center.style.opacity = '1';
     DOM.row1Center.style.opacity = '1';
 
-    // Re-init Lucide for new icons
     initLucide();
 
-    // Remove animation class after it completes
     setTimeout(() => {
       DOM.row2Center.classList.remove('panel-enter');
       DOM.row1Center.classList.remove('panel-enter');
@@ -260,8 +259,71 @@ function loadPanel(appName) {
   }, 100);
 }
 
+function showAppSwitcher() {
+  // Remove existing switcher
+  const existing = document.getElementById('app-switcher');
+  if (existing) { existing.remove(); return; }
+
+  const apps = [
+    { id: 'default',     icon: 'layout-grid', label: 'Default'  },
+    { id: 'spotify',     icon: 'music',        label: 'Spotify'  },
+    { id: 'chrome',      icon: 'globe',        label: 'Chrome'   },
+    { id: 'word',        icon: 'file-text',    label: 'Word'     },
+    { id: 'excel',       icon: 'table',        label: 'Excel'    },
+    { id: 'powerpoint',  icon: 'presentation', label: 'PPT'      },
+    { id: 'vscode',      icon: 'code-2',       label: 'VSCode'   },
+  ];
+
+  const switcher = document.createElement('div');
+  switcher.id = 'app-switcher';
+  switcher.style.cssText = `
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 96px;
+    background: var(--bg-well);
+    border-bottom: 1px solid var(--separator);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 12px;
+    z-index: 400;
+    animation: panelFadeIn 150ms var(--ease-apple) forwards;
+    overflow-x: auto;
+  `;
+
+  apps.forEach(app => {
+    const btn = document.createElement('button');
+    btn.className = `tb-btn tb-btn--icon-only${AppState.activeApp === app.id ? ' tb-btn--active' : ''}`;
+    btn.style.cssText = 'flex-direction:column;gap:4px;height:72px;min-width:64px;font-size:10px;';
+    btn.innerHTML = `
+      <i data-lucide="${app.icon}" class="icon"></i>
+      <span>${app.label}</span>
+    `;
+    btn.addEventListener('click', () => {
+      Haptics.tap();
+      switchApp(app.id);
+      switcher.remove();
+    });
+    switcher.appendChild(btn);
+  });
+
+  // Tap outside to close
+  setTimeout(() => {
+    document.addEventListener('touchstart', () => switcher.remove(), { once: true, passive: true });
+  }, 100);
+
+  document.getElementById('touchbar').appendChild(switcher);
+  initLucide();
+}
+
 // ── SYSTEM BUTTONS ───────────────────────────────────────────────
 function initSystemButtons() {
+
+  // App icon badge — tap to show manual panel switcher
+  DOM.appIcon.addEventListener('click', () => {
+    Haptics.tap();
+    showAppSwitcher();
+  });
 
   // Volume — tap opens slider well
   DOM.btnVolume.addEventListener('click', () => {

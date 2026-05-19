@@ -112,6 +112,11 @@ html, body {
 .row--actions { background: var(--bg-base); }
 .row--system  { background: var(--bg-row); }
 
+.row--system {
+  background: var(--bg-row);
+  gap: 6px;
+} 
+
 /* Row zones */
 .row__left {
   width: 52px;
@@ -174,8 +179,8 @@ button {
 /* Standard Touch Bar button */
 .tb-btn {
   height: 56px;
-  min-width: 52px;
-  padding: 0 12px;
+  min-width: 56px;
+  padding: 0 14px;
   border-radius: var(--radius-btn);
   background: var(--bg-button);
   gap: 6px;
@@ -239,7 +244,7 @@ button {
 .btn-group {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 8px;
   flex-shrink: 0;
 }
 .btn-group-sep {
@@ -392,10 +397,22 @@ button {
   font-weight: 600;
   color: var(--text-primary);
 }
-#row3.np-size2 .system-divider,
-#row3.np-size2 .system-controls,
+#row3.np-size2 #sys-extras,
+#row3.np-size2 #sys-divider-2,
 #row3.np-size2 .clock {
   display: none;
+}
+
+#row3.np-size2 #sys-always {
+  display: flex !important;
+}
+
+#row3.np-size2 .system-divider:first-of-type {
+  display: flex;
+}
+
+#row3.np-size2 #np-sys-controls {
+  display: flex !important;
 }
 
 /* ── NOW PLAYING SIZE 3 — HALF SCREEN ────────────────────────── */

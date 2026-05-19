@@ -49,53 +49,53 @@
     <!-- ROW 3: System Strip — always visible, never changes -->
     <div id="row3" class="row row--system">
 
-      <!-- Now Playing pill — left side -->
-      <div id="now-playing-pill" class="now-playing-pill">
-        <div class="pill__art" id="pill-art"></div>
-        <span class="pill__title" id="pill-title">Not Playing</span>
-        <div class="pill__controls">
-          <button class="pill__btn" data-action="play_pause">
-            <i data-lucide="play" class="icon icon--sm"></i>
-          </button>
-          <button class="pill__btn" data-action="next_track">
-            <i data-lucide="skip-forward" class="icon icon--sm"></i>
-          </button>
-        </div>
-      </div>
-
-      <div class="system-divider"></div>
-
-      <!-- Volume, Brightness, Mute -->
-      <div class="system-controls">
-        <button class="sys-btn" id="btn-volume" data-control="volume">
-          <i data-lucide="volume-2" class="icon"></i>
-        </button>
-        <button class="sys-btn" id="btn-brightness" data-control="brightness">
-          <i data-lucide="sun" class="icon"></i>
-        </button>
-        <button class="sys-btn" id="btn-mute" data-action="mute">
-          <i data-lucide="volume-x" class="icon"></i>
-        </button>
-      </div>
-
-      <div class="system-divider"></div>
-
-      <!-- Emoji + Screenshot -->
-      <div class="system-controls">
-        <button class="sys-btn" id="btn-emoji">
-          <i data-lucide="smile" class="icon"></i>
-        </button>
-        <button class="sys-btn" data-action="screenshot">
-          <i data-lucide="camera" class="icon"></i>
-        </button>
-      </div>
-
-      <div class="system-divider"></div>
-
-      <!-- Clock -->
-      <div class="clock" id="clock">12:00</div>
-
+  <!-- Now Playing pill — left side -->
+  <div id="now-playing-pill" class="now-playing-pill">
+    <div class="pill__art" id="pill-art"></div>
+    <span class="pill__title" id="pill-title">Not Playing</span>
+    <div class="pill__controls">
+      <button class="pill__btn" data-action="play_pause">
+        <i data-lucide="play" class="icon icon--sm"></i>
+      </button>
+      <button class="pill__btn" data-action="next_track">
+        <i data-lucide="skip-forward" class="icon icon--sm"></i>
+      </button>
     </div>
+  </div>
+
+  <div class="system-divider"></div>
+
+  <!-- Volume, Brightness, Mute — always visible -->
+  <div class="system-controls" id="sys-always">
+    <button class="sys-btn" id="btn-volume" data-control="volume">
+      <i data-lucide="volume-2" class="icon"></i>
+    </button>
+    <button class="sys-btn" id="btn-brightness" data-control="brightness">
+      <i data-lucide="sun" class="icon"></i>
+    </button>
+    <button class="sys-btn" id="btn-mute" data-action="mute">
+      <i data-lucide="volume-x" class="icon"></i>
+    </button>
+  </div>
+
+  <div class="system-divider" id="sys-divider-2"></div>
+
+  <!-- Emoji + Screenshot -->
+  <div class="system-controls" id="sys-extras">
+    <button class="sys-btn" id="btn-emoji">
+      <i data-lucide="smile" class="icon"></i>
+    </button>
+    <button class="sys-btn" data-action="screenshot">
+      <i data-lucide="camera" class="icon"></i>
+    </button>
+  </div>
+
+  <div class="system-divider"></div>
+
+  <!-- Clock -->
+  <div class="clock" id="clock">12:00</div>
+
+</div>
 
   </div>
 
