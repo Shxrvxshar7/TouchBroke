@@ -68,6 +68,11 @@ async def route_message(data: dict):
         elif action == "focus_app":
             pass  # Phase 4
 
+        elif action == "copy_color":
+            import pyperclip
+            pyperclip.copy(str(value))
+            log.info(f"Color copied: {value}")
+
     # ── KEYBOARD SHORTCUTS ────────────────────────────────────
     elif panel in ("word", "excel", "powerpoint", "vscode", "default"):
         handle_keyboard(action)
@@ -105,6 +110,15 @@ async def handle_client(websocket):
 
     client_ip = websocket.remote_address[0]
     log.info(f"✓ Phone connected from {client_ip}")
+
+    # Send current volume and brightness to phone on connect
+    try:
+        from actions.volume import get_volume
+        from actions.brightness import get_brightness
+        await send_to_phone({"event": "volume", "value": get_volume()})
+        await send_to_phone({"event": "brightness", "value": get_brightness()})
+    except Exception as e:
+        log.debug(f"Sync error: {e}")
 
     try:
         # Keep listening for messages until connection closes

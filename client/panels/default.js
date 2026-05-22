@@ -1,7 +1,7 @@
 // ── DEFAULT PANEL ────────────────────────────────────────────────
 // Shown when active app is unknown.
 // Row 1: Word suggestions (already handled by WordSuggestions component)
-// Row 2: Universal shortcuts — formatting, clipboard, function keys
+// Row 2: Universal shortcuts — formatting, clipboard, function keys, color picker
 
 export class DefaultPanel {
   constructor({ row1, row2, send }) {
@@ -11,9 +11,6 @@ export class DefaultPanel {
   }
 
   mount() {
-    // Row 1 — word suggestions already mounted by app.js
-    // Nothing extra needed here
-
     // Row 2 — universal shortcuts
     this.row2.innerHTML = `
       <div class="btn-group">
@@ -23,19 +20,23 @@ export class DefaultPanel {
       </div>
       <div class="btn-group-sep"></div>
       <div class="btn-group">
-        <button class="tb-btn" data-action="copy">
+        <button class="tb-btn tb-btn--icon-only" data-action="copy">
           <i data-lucide="copy" class="icon"></i>
         </button>
-        <button class="tb-btn" data-action="paste">
+        <button class="tb-btn tb-btn--icon-only" data-action="paste">
           <i data-lucide="clipboard" class="icon"></i>
         </button>
-        <button class="tb-btn" data-action="undo">
+        <button class="tb-btn tb-btn--icon-only" data-action="undo">
           <i data-lucide="undo-2" class="icon"></i>
         </button>
-        <button class="tb-btn" data-action="redo">
+        <button class="tb-btn tb-btn--icon-only" data-action="redo">
           <i data-lucide="redo-2" class="icon"></i>
         </button>
       </div>
+      <div class="btn-group-sep"></div>
+      <button class="tb-btn tb-btn--icon-only" data-action="color_picker">
+        <i data-lucide="palette" class="icon"></i>
+      </button>
       <div class="btn-group-sep"></div>
       <div class="btn-group scroll-row" style="flex:1;">
         ${[1,2,3,4,5,6,7,8,9,10,11,12].map(n =>
@@ -50,7 +51,10 @@ export class DefaultPanel {
   _wire() {
     this.row2.querySelectorAll('[data-action]').forEach(btn => {
       btn.addEventListener('click', () => {
-        this.send({ action: btn.dataset.action });
+        const action = btn.dataset.action;
+        // color_picker is handled globally in app.js — don't send to server
+        if (action === 'color_picker') return;
+        this.send({ action });
       });
     });
   }

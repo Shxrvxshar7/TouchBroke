@@ -5,6 +5,7 @@ import { EmojiPanel }     from './components/emoji-panel.js';
 import { SliderWell }     from './components/slider.js';
 import { WordSuggestions }from './components/word-suggestions.js';
 import { NowPlaying }     from './components/now-playing.js';
+import { ColorPicker } from './components/color-picker.js';
 
 // Panels
 import { SpotifyPanel }   from './panels/spotify.js';
@@ -152,6 +153,10 @@ function setStatusDot(state) {
 // This is the router — every message from the laptop comes here
 function handleServerMessage(data) {
   switch (data.event) {
+
+    case 'typing':
+      WordSuggestions.update(data.word);
+      break;
 
     case 'app_change':
       // Laptop detected a new active app — swap the panel
@@ -380,6 +385,14 @@ function initSystemButtons() {
       Haptics.tap();
       WS.send({ panel: 'spotify', action: btn.dataset.action });
     });
+  });
+
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-action="color_picker"]');
+    if (btn) {
+      Haptics.tap();
+      ColorPicker.toggle();
+    }
   });
 }
 

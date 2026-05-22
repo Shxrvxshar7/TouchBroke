@@ -149,3 +149,63 @@ class AppDetector:
 
         # Run detection loop in this thread (called from daemon thread in main.py)
         self._loop()
+
+
+# ── KEYBOARD WATCHER ─────────────────────────────────────────────
+# Watches keypresses and sends current typed word to phone
+# so word suggestions update in real time
+
+import threading
+
+class KeyboardWatcher:
+
+    def __init__(self, send_fn, loop):
+        self.send_fn    = send_fn
+        self.loop       = loop
+        self.current    = ""
+        self._thread    = None
+
+    def start(self):
+        self._thread = threading.Thread(
+            target=self._watch,
+            daemon=True
+        )
+        self._thread.start()
+        log.info("✓ Keyboard watcher running")
+
+    def _watch(self):
+        try:
+            import keyboard
+            keyboard.on_press(self._on_key)
+            keyboard.wait()
+        except Exception as e:
+            log.error(f"Keyboard watcher error: {e}")
+
+    def _on_key(self, event):
+        key = event.name
+
+        if key == 'space' or key == 'enter':
+            # Word completed — reset
+            self.current = ""
+            self._send("")
+        elif key == 'backspace':
+            self.current = self.current[:-1]
+            self._send(self.current)
+        elif len(key) == 1:
+            # Regular character
+            self.current += key
+            self._send(self.current)
+
+    def _send(self, word):
+        if self.loop and self.loop.is_running():
+            asyncio.run_coroutine_threadsafe(
+                self._async_send(word),
+                self.loop
+            )
+
+    async def _async_send(self, word):
+        from websocket_server import send_to_phone
+        await send_to_phone({
+            "event": "typing",
+            "word":  word
+        })
