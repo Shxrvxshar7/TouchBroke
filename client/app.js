@@ -373,11 +373,6 @@ function initSystemButtons() {
     });
   });
 
-  // Now playing pill — tap to expand
-  document.getElementById('now-playing-pill').addEventListener('click', () => {
-    NowPlaying.expand();
-  });
-
   // Pill play/pause and next buttons
   document.querySelectorAll('.pill__btn').forEach(btn => {
     btn.addEventListener('click', (e) => {

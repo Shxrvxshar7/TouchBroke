@@ -8,7 +8,9 @@ log = logging.getLogger("TouchBroke")
 
 def _get_volume_interface():
     devices = AudioUtilities.GetSpeakers()
-    interface = devices.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
+    # pycaw ≥0.5 wraps IMMDevice in AudioDevice; older versions return raw IMMDevice
+    dev = getattr(devices, '_dev', devices)
+    interface = dev.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
     return cast(interface, POINTER(IAudioEndpointVolume))
 
 def handle_volume(value):

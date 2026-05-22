@@ -215,10 +215,12 @@ def get_headers():
 
 
 def get_now_playing():
-    """Fetches current track from Spotify Web API."""
+    """Fetches current playback state from Spotify Web API.
+    Uses /me/player (not /currently-playing) to also get shuffle/repeat state.
+    """
     try:
         response = requests.get(
-            "https://api.spotify.com/v1/me/player/currently-playing",
+            "https://api.spotify.com/v1/me/player",
             headers=get_headers(),
             timeout=3,
         )
@@ -239,14 +241,16 @@ def get_now_playing():
 
         item = data["item"]
         return {
-            "id":           item["id"],
-            "name":         item["name"],
-            "artist":       ", ".join(a["name"] for a in item["artists"]),
-            "album":        item["album"]["name"],
-            "album_art":    item["album"]["images"][0]["url"] if item["album"]["images"] else None,
-            "duration_ms":  item["duration_ms"],
-            "progress_ms":  data["progress_ms"],
-            "is_playing":   data["is_playing"],
+            "id":            item["id"],
+            "name":          item["name"],
+            "artist":        ", ".join(a["name"] for a in item["artists"]),
+            "album":         item["album"]["name"],
+            "album_art":     item["album"]["images"][0]["url"] if item["album"]["images"] else None,
+            "duration_ms":   item["duration_ms"],
+            "progress_ms":   data["progress_ms"],
+            "is_playing":    data["is_playing"],
+            "shuffle_state": data.get("shuffle_state", False),
+            "repeat_state":  data.get("repeat_state", "off"),
         }
 
     except Exception as e:

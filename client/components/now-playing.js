@@ -16,6 +16,8 @@ const NowPlaying = (() => {
   let progressMs    = 0;
   let isPlaying     = false;
   let isLiked       = false;
+  let shuffleState  = false;
+  let repeatState   = 'off';
 
   // ── DOM REFS ──────────────────────────────────────────────────
   const pill        = document.getElementById('now-playing-pill');
@@ -78,7 +80,7 @@ const NowPlaying = (() => {
           <i data-lucide="skip-back" class="icon icon--lg"></i>
         </button>
         <button class="tb-btn tb-btn--icon-only" id="npe-playpause" style="width:64px;height:64px;border-radius:32px;background:var(--accent-blue);">
-          <i data-lucide="pause" class="icon icon--lg"></i>
+          <i data-lucide="${isPlaying ? 'pause' : 'play'}" class="icon icon--lg"></i>
         </button>
         <button class="tb-btn tb-btn--icon-only" id="npe-next">
           <i data-lucide="skip-forward" class="icon icon--lg"></i>
@@ -106,10 +108,15 @@ const NowPlaying = (() => {
     });
     expandedEl.querySelector('#npe-shuffle').addEventListener('click', () => {
       Haptics.tap();
+      shuffleState = !shuffleState;
+      updateShuffleBtn();
       WS.send({ panel: 'spotify', action: 'shuffle' });
     });
     expandedEl.querySelector('#npe-repeat').addEventListener('click', () => {
       Haptics.tap();
+      const states = { 'off': 'context', 'context': 'track', 'track': 'off' };
+      repeatState = states[repeatState] || 'off';
+      updateRepeatBtn();
       WS.send({ panel: 'spotify', action: 'repeat' });
     });
     expandedEl.querySelector('#npe-like').addEventListener('click', () => {
@@ -139,6 +146,31 @@ const NowPlaying = (() => {
       WS.send({ panel: 'spotify', action: 'seek', value: seekMs });
     });
 
+    updateShuffleBtn();
+    updateRepeatBtn();
+    if (window.lucide) window.lucide.createIcons();
+  }
+
+  // ── SHUFFLE / REPEAT VISUAL STATE ────────────────────────────
+  function updateShuffleBtn() {
+    const btn = expandedEl && expandedEl.querySelector('#npe-shuffle');
+    if (!btn) return;
+    btn.style.color = shuffleState ? 'var(--accent-orange, #ff9500)' : '';
+  }
+
+  function updateRepeatBtn() {
+    const btn = expandedEl && expandedEl.querySelector('#npe-repeat');
+    if (!btn) return;
+    if (repeatState === 'off') {
+      btn.style.color = '';
+      btn.innerHTML = '<i data-lucide="repeat" class="icon"></i>';
+    } else if (repeatState === 'context') {
+      btn.style.color = 'var(--accent-blue)';
+      btn.innerHTML = '<i data-lucide="repeat" class="icon"></i>';
+    } else {
+      btn.style.color = 'var(--accent-blue)';
+      btn.innerHTML = '<i data-lucide="repeat-1" class="icon"></i>';
+    }
     if (window.lucide) window.lucide.createIcons();
   }
 
@@ -240,46 +272,6 @@ const NowPlaying = (() => {
     if (expandedEl) expandedEl.classList.remove('visible');
     pillTitle.classList.add('pill__title--playing');
 
-    // Add volume and brightness buttons to Row 3 right side
-    // so they're accessible even when Now Playing takes over
-    const existing = document.getElementById('np-sys-controls');
-    if (!existing) {
-      const sysControls = document.createElement('div');
-      sysControls.id = 'np-sys-controls';
-      sysControls.style.cssText = `
-        display: flex;
-        align-items: center;
-        gap: 4px;
-        flex-shrink: 0;
-        margin-left: auto;
-        padding-right: 8px;
-      `;
-      sysControls.innerHTML = `
-        <button class="sys-btn" id="np-btn-volume">
-          <i data-lucide="volume-2" class="icon"></i>
-        </button>
-        <button class="sys-btn" id="np-btn-brightness">
-          <i data-lucide="sun" class="icon"></i>
-        </button>
-        <button class="sys-btn" id="np-btn-mute">
-          <i data-lucide="volume-x" class="icon"></i>
-        </button>
-      `;
-      row3.appendChild(sysControls);
-      if (window.lucide) window.lucide.createIcons();
-
-      // Wire up the buttons
-      sysControls.querySelector('#np-btn-volume').addEventListener('click', () => {
-        document.getElementById('btn-volume').click();
-      });
-      sysControls.querySelector('#np-btn-brightness').addEventListener('click', () => {
-        document.getElementById('btn-brightness').click();
-      });
-      sysControls.querySelector('#np-btn-mute').addEventListener('click', () => {
-        document.getElementById('btn-mute').click();
-      });
-    }
-
     // Pulse animation on new song
     anime({
       targets: pill,
@@ -292,9 +284,8 @@ const NowPlaying = (() => {
   function setSize3() {
     currentSize = 3;
     buildExpanded();
-    requestAnimationFrame(() => {
-      expandedEl.classList.add('visible');
-    });
+    expandedEl.offsetHeight; // force reflow so CSS transition fires
+    expandedEl.classList.add('visible');
     if (window.lucide) window.lucide.createIcons();
   }
 
@@ -374,10 +365,18 @@ const NowPlaying = (() => {
     currentTrack    = track;
     isPlaying       = track.is_playing;
     progressMs      = track.progress_ms || 0;
+    shuffleState    = track.shuffle_state || false;
+    repeatState     = track.repeat_state  || 'off';
 
     // ── Update pill ──────────────────────────────────────────
     pillTitle.textContent = track.name;
     pillTitle.classList.add('pill__title--playing');
+
+    const pillPP = document.getElementById('pill-pp');
+    if (pillPP) {
+      pillPP.innerHTML = `<i data-lucide="${isPlaying ? 'pause' : 'play'}" class="icon icon--sm"></i>`;
+      if (window.lucide) window.lucide.createIcons();
+    }
 
     if (track.album_art) {
       pillArt.innerHTML = `<img src="${track.album_art}" crossorigin="anonymous" alt="" />`;
@@ -420,6 +419,8 @@ const NowPlaying = (() => {
           : '<i data-lucide="play" class="icon icon--lg"></i>';
         if (window.lucide) window.lucide.createIcons();
       }
+      updateShuffleBtn();
+      updateRepeatBtn();
     }
 
     // ── Start/stop progress timer ────────────────────────────
@@ -429,16 +430,29 @@ const NowPlaying = (() => {
 
   // ── INIT ──────────────────────────────────────────────────────
   function init() {
-    // Long press pill = size 4 (concert mode)
     let longPressTimer;
+    let suppressClick = false;
+
     pill.addEventListener('touchstart', () => {
+      suppressClick = false;
       longPressTimer = setTimeout(() => {
+        suppressClick = true;
         Haptics.success();
         setSize4();
       }, 600);
     }, { passive: true });
+
+    pill.addEventListener('touchmove', () => {
+      clearTimeout(longPressTimer);
+    }, { passive: true });
+
     pill.addEventListener('touchend', () => {
       clearTimeout(longPressTimer);
+    }, { passive: true });
+
+    pill.addEventListener('click', () => {
+      if (suppressClick) { suppressClick = false; return; }
+      expand();
     });
   }
 

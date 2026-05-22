@@ -396,9 +396,9 @@ button {
   font-size: 15px;
   font-weight: 600;
   color: var(--text-primary);
+  flex: 0 1 auto;
+  max-width: 200px;
 }
-#row3.np-size2 #sys-extras,
-#row3.np-size2 #sys-divider-2,
 #row3.np-size2 .clock {
   display: none;
 }
@@ -411,8 +411,20 @@ button {
   display: flex;
 }
 
-#row3.np-size2 #np-sys-controls {
-  display: flex !important;
+#row3.np-size2 #pill-pp {
+  width: 52px;
+  height: 52px;
+  border-radius: 26px;
+  background: var(--accent-blue);
+  color: #fff;
+}
+
+#row3.np-size2 .pill__controls {
+  gap: 6px;
+}
+
+#row3.np-size2 .pill__btn {
+  color: var(--text-primary);
 }
 
 /* ── NOW PLAYING SIZE 3 — HALF SCREEN ────────────────────────── */

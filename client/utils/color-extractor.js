@@ -50,16 +50,16 @@ const ColorExtractor = (() => {
   function applyTint(r, g, b) {
     const root = document.documentElement;
 
-    // Main tint — very subtle, 10% opacity so text stays readable
+    // Main tint — 20% opacity for visible but readable color wash
     root.style.setProperty(
       '--dynamic-tint',
-      `rgba(${r}, ${g}, ${b}, 0.10)`
+      `rgba(${r}, ${g}, ${b}, 0.20)`
     );
 
     // Stronger version for Now Playing background
     root.style.setProperty(
       '--dynamic-tint-strong',
-      `rgba(${r}, ${g}, ${b}, 0.25)`
+      `rgba(${r}, ${g}, ${b}, 0.35)`
     );
 
     // Pure color for accent uses (progress bar etc.)
@@ -72,7 +72,7 @@ const ColorExtractor = (() => {
     const row3 = document.getElementById('row3');
     if (row3) {
       row3.style.transition = `background ${TRANSITION_DURATION}ms ease`;
-      row3.style.background = `rgba(${r}, ${g}, ${b}, 0.08)`;
+      row3.style.background = `rgba(${r}, ${g}, ${b}, 0.20)`;
     }
   }
 
@@ -80,8 +80,8 @@ const ColorExtractor = (() => {
   // Called when music stops — fades back to default
   function resetTint() {
     const root = document.documentElement;
-    root.style.setProperty('--dynamic-tint', 'rgba(74, 158, 255, 0.08)');
-    root.style.setProperty('--dynamic-tint-strong', 'rgba(74, 158, 255, 0.15)');
+    root.style.setProperty('--dynamic-tint', 'rgba(74, 158, 255, 0.20)');
+    root.style.setProperty('--dynamic-tint-strong', 'rgba(74, 158, 255, 0.35)');
     root.style.setProperty('--dynamic-color', 'rgb(74, 158, 255)');
 
     const row3 = document.getElementById('row3');
