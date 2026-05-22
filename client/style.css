@@ -399,15 +399,14 @@ button {
   flex: 0 1 auto;
   max-width: 200px;
 }
+#row3.np-size2 .system-controls,
+#row3.np-size2 .system-divider,
 #row3.np-size2 .clock {
   display: none;
 }
 
-#row3.np-size2 #sys-always {
-  display: flex !important;
-}
-
-#row3.np-size2 .system-divider:first-of-type {
+#row3.np-size2 #sys-always,
+#row3.np-size2 #sys-extras {
   display: flex;
 }
 
@@ -419,8 +418,16 @@ button {
   color: #fff;
 }
 
+#row3.np-size2 #pill-prev,
+#row3.np-size2 #pill-next {
+  width: 40px;
+  height: 40px;
+  border-radius: 20px;
+}
+
 #row3.np-size2 .pill__controls {
-  gap: 6px;
+  gap: 8px;
+  margin-left: auto;
 }
 
 #row3.np-size2 .pill__btn {

@@ -5,11 +5,12 @@
 const WS = (() => {
 
   // ── PRIVATE STATE ─────────────────────────────────────────────
-  let socket        = null;
-  let reconnectTimer= null;
-  let isConnecting  = false;
-  let callbacks     = {};
-  let messageQueue  = []; // messages sent before connection opens
+  let socket           = null;
+  let reconnectTimer   = null;
+  let heartbeatInterval= null;
+  let isConnecting     = false;
+  let callbacks        = {};
+  let messageQueue     = []; // messages sent before connection opens
 
   // The laptop's IP and port — read from URL so she just changes the URL
   // e.g. http://192.168.1.5:8080 → ws://192.168.1.5:8765
@@ -42,6 +43,13 @@ const WS = (() => {
 
       if (callbacks.onConnect) callbacks.onConnect();
 
+      // Keep connection alive — mobile browsers drop idle WebSockets
+      heartbeatInterval = setInterval(() => {
+        if (socket && socket.readyState === WebSocket.OPEN) {
+          socket.send(JSON.stringify({ type: 'ping' }));
+        }
+      }, 10000);
+
       // Flush any messages that were queued before connection opened
       while (messageQueue.length > 0) {
         const msg = messageQueue.shift();
@@ -66,6 +74,8 @@ const WS = (() => {
       console.log('WebSocket closed. Code:', event.code);
       isConnecting = false;
       socket = null;
+      clearInterval(heartbeatInterval);
+      heartbeatInterval = null;
 
       if (callbacks.onDisconnect) callbacks.onDisconnect();
 

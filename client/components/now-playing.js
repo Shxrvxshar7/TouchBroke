@@ -174,6 +174,28 @@ const NowPlaying = (() => {
     if (window.lucide) window.lucide.createIcons();
   }
 
+  function updatePillShuffleBtn() {
+    const btn = document.getElementById('pill-shuffle');
+    if (!btn) return;
+    btn.style.color = shuffleState ? 'var(--accent-orange, #ff9500)' : '';
+  }
+
+  function updatePillRepeatBtn() {
+    const btn = document.getElementById('pill-repeat');
+    if (!btn) return;
+    if (repeatState === 'off') {
+      btn.style.color = '';
+      btn.innerHTML = '<i data-lucide="repeat" class="icon icon--sm"></i>';
+    } else if (repeatState === 'context') {
+      btn.style.color = 'var(--accent-blue)';
+      btn.innerHTML = '<i data-lucide="repeat" class="icon icon--sm"></i>';
+    } else {
+      btn.style.color = 'var(--accent-blue)';
+      btn.innerHTML = '<i data-lucide="repeat-1" class="icon icon--sm"></i>';
+    }
+    if (window.lucide) window.lucide.createIcons();
+  }
+
   // ── BUILD FULLSCREEN (Size 4) ────────────────────────────────
   function buildFullscreen() {
     if (fullscreenEl) fullscreenEl.remove();
@@ -272,6 +294,45 @@ const NowPlaying = (() => {
     if (expandedEl) expandedEl.classList.remove('visible');
     pillTitle.classList.add('pill__title--playing');
 
+    // Inject shuffle + repeat buttons into pill controls (once only)
+    const controls = pill.querySelector('.pill__controls');
+    if (controls && !document.getElementById('pill-shuffle')) {
+      const shuffleBtn = document.createElement('button');
+      shuffleBtn.className = 'pill__btn';
+      shuffleBtn.id = 'pill-shuffle';
+      shuffleBtn.innerHTML = '<i data-lucide="shuffle" class="icon icon--sm"></i>';
+      controls.insertBefore(shuffleBtn, controls.firstChild);
+
+      const repeatBtn = document.createElement('button');
+      repeatBtn.className = 'pill__btn';
+      repeatBtn.id = 'pill-repeat';
+      repeatBtn.innerHTML = '<i data-lucide="repeat" class="icon icon--sm"></i>';
+      controls.appendChild(repeatBtn);
+
+      shuffleBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        Haptics.tap();
+        shuffleState = !shuffleState;
+        updatePillShuffleBtn();
+        updateShuffleBtn();
+        WS.send({ panel: 'spotify', action: 'shuffle' });
+      });
+      repeatBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        Haptics.tap();
+        const states = { 'off': 'context', 'context': 'track', 'track': 'off' };
+        repeatState = states[repeatState] || 'off';
+        updatePillRepeatBtn();
+        updateRepeatBtn();
+        WS.send({ panel: 'spotify', action: 'repeat' });
+      });
+
+      if (window.lucide) window.lucide.createIcons();
+    }
+
+    updatePillShuffleBtn();
+    updatePillRepeatBtn();
+
     // Pulse animation on new song
     anime({
       targets: pill,
@@ -284,8 +345,10 @@ const NowPlaying = (() => {
   function setSize3() {
     currentSize = 3;
     buildExpanded();
-    expandedEl.offsetHeight; // force reflow so CSS transition fires
-    expandedEl.classList.add('visible');
+    expandedEl.style.transition = 'none';
+    expandedEl.style.transform  = 'translateY(0)';
+    expandedEl.style.opacity    = '1';
+    expandedEl.style.pointerEvents = 'all';
     if (window.lucide) window.lucide.createIcons();
   }
 
@@ -422,6 +485,9 @@ const NowPlaying = (() => {
       updateShuffleBtn();
       updateRepeatBtn();
     }
+
+    updatePillShuffleBtn();
+    updatePillRepeatBtn();
 
     // ── Start/stop progress timer ────────────────────────────
     if (isPlaying) startProgressTimer();

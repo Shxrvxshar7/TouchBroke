@@ -22,6 +22,21 @@ log = logging.getLogger("TouchBroke")
 # Only one phone connects at a time.
 connected_client = None
 
+# ── DEBOUNCE ──────────────────────────────────────────────────
+# Prevents COM crashes from rapid slider drag events.
+# Keyed by action name; only the last call within the window runs.
+_debounce_tasks: dict = {}
+
+async def _debounced(delay: float, fn):
+    await asyncio.sleep(delay)
+    fn()
+
+def _schedule_debounced(key: str, delay: float, fn):
+    existing = _debounce_tasks.get(key)
+    if existing and not existing.done():
+        existing.cancel()
+    _debounce_tasks[key] = asyncio.ensure_future(_debounced(delay, fn))
+
 
 # ── SEND TO PHONE ─────────────────────────────────────────────
 # Called by other modules to send data to the phone.
@@ -43,6 +58,9 @@ async def send_to_phone(data: dict):
 # Reads the 'panel' and 'action' keys and calls the right handler.
 async def route_message(data: dict):
 
+    if data.get("type") == "ping":
+        return
+
     # Import action handlers here to avoid circular imports
     from actions.keyboard   import handle_keyboard
     from actions.volume     import handle_volume
@@ -57,9 +75,11 @@ async def route_message(data: dict):
     # ── SYSTEM CONTROLS ───────────────────────────────────────
     if panel == "system":
         if action == "volume":
-            handle_volume(int(value))
+            v = int(value)
+            _schedule_debounced("volume", 0.05, lambda: handle_volume(v))
         elif action == "brightness":
-            handle_brightness(int(value))
+            v = int(value)
+            _schedule_debounced("brightness", 0.05, lambda: handle_brightness(v))
         elif action == "mute":
             from actions.volume import toggle_mute
             toggle_mute()
@@ -129,10 +149,13 @@ async def handle_client(websocket):
             except json.JSONDecodeError:
                 log.error(f"Invalid JSON received: {raw_message}")
 
-    except websockets.exceptions.ConnectionClosedOK:
-        log.info("Phone disconnected cleanly")
+    except websockets.exceptions.ConnectionClosedOK as e:
+        log.info(f"Phone disconnected cleanly — code={e.code} reason={e.reason!r}")
     except websockets.exceptions.ConnectionClosedError as e:
-        log.warning(f"Phone disconnected with error: {e}")
+        log.warning(f"Phone disconnected with error — code={e.code} reason={e.reason!r}")
+    except Exception:
+        import traceback
+        log.error("Unexpected error in handle_client:\n" + traceback.format_exc())
     finally:
         connected_client = None
         log.info("Waiting for phone to reconnect...")
