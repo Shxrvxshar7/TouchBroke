@@ -155,57 +155,88 @@ class AppDetector:
 # Watches keypresses and sends current typed word to phone
 # so word suggestions update in real time
 
-import threading
-
 class KeyboardWatcher:
 
-    def __init__(self, send_fn, loop):
-        self.send_fn    = send_fn
-        self.loop       = loop
-        self.current    = ""
-        self._thread    = None
+    def __init__(self, loop):
+        self.loop    = loop
+        self.current = ""
 
     def start(self):
-        self._thread = threading.Thread(
-            target=self._watch,
-            daemon=True
-        )
-        self._thread.start()
-        log.info("✓ Keyboard watcher running")
-
-    def _watch(self):
+        """Blocking — call from a dedicated daemon thread (no sub-thread needed)."""
         try:
             import keyboard
+            _patch_keyboard_message_pump(keyboard)
             keyboard.on_press(self._on_key)
+            log.info("✓ Keyboard watcher running")
             keyboard.wait()
         except Exception as e:
             log.error(f"Keyboard watcher error: {e}")
 
     def _on_key(self, event):
-        key = event.name
+        try:
+            key = event.name
+            if not key:
+                return
 
-        if key == 'space' or key == 'enter':
-            # Word completed — reset
-            self.current = ""
-            self._send("")
-        elif key == 'backspace':
-            self.current = self.current[:-1]
-            self._send(self.current)
-        elif len(key) == 1:
-            # Regular character
-            self.current += key
-            self._send(self.current)
+            if key in ('space', 'enter', 'return'):
+                self.current = ""
+                self._send("")
+            elif key == 'backspace':
+                self.current = self.current[:-1]
+                self._send(self.current)
+            elif len(key) == 1 and key.isprintable():
+                self.current += key
+                print(f"[kbd] {self.current}", flush=True)
+                self._send(self.current)
+        except Exception as e:
+            log.debug(f"_on_key error: {e}")
 
     def _send(self, word):
-        if self.loop and self.loop.is_running():
-            asyncio.run_coroutine_threadsafe(
-                self._async_send(word),
-                self.loop
-            )
+        if self.loop and not self.loop.is_closed():
+            try:
+                asyncio.run_coroutine_threadsafe(
+                    self._async_send(word),
+                    self.loop
+                )
+            except Exception as e:
+                log.debug(f"Keyboard send error: {e}")
 
     async def _async_send(self, word):
-        from websocket_server import send_to_phone
-        await send_to_phone({
-            "event": "typing",
-            "word":  word
-        })
+        try:
+            from websocket_server import send_to_phone
+            await send_to_phone({"event": "typing", "word": word})
+        except Exception as e:
+            log.debug(f"Keyboard async send error: {e}")
+
+
+def _patch_keyboard_message_pump(keyboard):
+    """Fix two bugs in keyboard._winkeyboard.listen (v0.13.5):
+
+    1. `LPMSG()` is a null pointer — GetMessageW crashes writing to address 0
+       when any application message arrives in the listener thread.
+    2. `while not GetMessage(...)` is inverted — exits on real messages (→1),
+       only loops on WM_QUIT (→0), so the listener dies after one stray message.
+
+    Both bugs are harmless in a bare test script (GetMessage never returns there)
+    but fatal in a server where the thread's message queue gets incidental posts.
+    """
+    try:
+        import keyboard._winkeyboard as _wk
+        from ctypes.wintypes import MSG
+
+        if getattr(_wk, "_listen_patched", False):
+            return
+
+        def fixed_listen(callback):
+            _wk.prepare_intercept(callback)
+            msg = MSG()                # real allocation, not the null LPMSG()
+            ptr = _wk.LPMSG(msg)      # valid pointer to msg
+            while _wk.GetMessage(ptr, 0, 0, 0) > 0:   # correct: loop on valid msgs
+                _wk.TranslateMessage(ptr)
+                _wk.DispatchMessage(ptr)
+
+        _wk.listen = fixed_listen
+        _wk._listen_patched = True
+        log.debug("keyboard._winkeyboard.listen patched")
+    except Exception as e:
+        log.warning(f"Could not patch keyboard library message pump: {e}")

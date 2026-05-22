@@ -116,13 +116,14 @@ async def main():
     # Runs as asyncio background task
     asyncio.create_task(start_spotify_polling())
 
+    main_loop = asyncio.get_event_loop()
     keyboard_thread = threading.Thread(
         target=start_keyboard_watcher,
+        args=(main_loop,),
         daemon=True
     )
-    keyboard_thread.start()
 
-    
+    keyboard_thread.start()
     # Start WebSocket server — runs forever
     await start_server()
 
@@ -141,14 +142,11 @@ async def start_spotify_polling():
 
     log.warning("Spotify polling never started — no token after 60s")
 
-def start_keyboard_watcher():
+def start_keyboard_watcher(main_loop):
     try:
-        import keyboard
         from app_detector import KeyboardWatcher
-        import asyncio
-        loop = asyncio.get_event_loop()
-        watcher = KeyboardWatcher(None, loop)
-        watcher.start()
+        watcher = KeyboardWatcher(main_loop)
+        watcher.start()  # blocking — this thread IS the keyboard thread
     except ImportError:
         log.warning("keyboard library not installed — word suggestions disabled")
     except Exception as e:
