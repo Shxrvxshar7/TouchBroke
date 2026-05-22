@@ -374,64 +374,109 @@ button {
 }
 
 /* ── NOW PLAYING SIZE 2 — COMPACT BAR ────────────────────────── */
-/* Replaces all of Row 3 */
+/* Visual order enforced with CSS order property:                  */
+/*   1: #now-playing-pill  2: #np-center-controls                  */
+/*   3: #sys-always        4: #sys-extras                          */
 #row3.np-size2 {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   padding: 0 12px;
-  gap: 12px;
 }
+
+/* LEFT (order 1) — art + title only, fixed size */
 #row3.np-size2 .now-playing-pill {
-  max-width: 100%;
+  order: 1;
+  flex-shrink: 0;
   height: 100%;
   border-radius: 0;
   background: transparent;
   padding: 0;
-  flex: 1;
+  gap: 8px;
+  overflow: visible;
 }
 #row3.np-size2 .pill__art {
-  width: 56px;
-  height: 56px;
-  border-radius: 8px;
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+  flex-shrink: 0;
 }
 #row3.np-size2 .pill__title {
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--text-primary);
-  flex: 0 1 auto;
-  max-width: 200px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 160px;
 }
-#row3.np-size2 .system-controls,
+/* Pill's own inline controls hidden — #np-center-controls has the music buttons */
+#row3.np-size2 .pill__controls {
+  display: none;
+}
+
+/* CENTER (order 2) — music controls, fills remaining space */
+#np-center-controls {
+  display: none;
+}
+#row3.np-size2 #np-center-controls {
+  order: 2;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+#np-center-controls #np-pp {
+  width: 48px;
+  height: 48px;
+  border-radius: 24px;
+  background: var(--accent-blue);
+  color: #fff;
+  flex-shrink: 0;
+}
+#np-center-controls #np-shuffle,
+#np-center-controls #np-prev,
+#np-center-controls #np-next,
+#np-center-controls #np-repeat {
+  width: 32px;
+  height: 32px;
+  border-radius: 16px;
+  background: transparent;
+  flex-shrink: 0;
+}
+#np-center-controls .pill__btn {
+  color: var(--text-primary);
+}
+
+/* RIGHT — vol/bright/mute (order 3) + emoji/screenshot (order 4) */
 #row3.np-size2 .system-divider,
 #row3.np-size2 .clock {
   display: none;
 }
-
-#row3.np-size2 #sys-always,
-#row3.np-size2 #sys-extras {
+#row3.np-size2 .system-controls {
+  display: none;
+}
+#row3.np-size2 #sys-always {
+  order: 3;
   display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0;
 }
-
-#row3.np-size2 #pill-pp {
-  width: 52px;
-  height: 52px;
-  border-radius: 26px;
-  background: var(--accent-blue);
-  color: #fff;
+#row3.np-size2 #sys-extras {
+  order: 4;
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0;
 }
-
-#row3.np-size2 #pill-prev,
-#row3.np-size2 #pill-next {
-  width: 40px;
-  height: 40px;
-  border-radius: 20px;
-}
-
-#row3.np-size2 .pill__controls {
-  gap: 8px;
-  margin-left: auto;
-}
-
-#row3.np-size2 .pill__btn {
-  color: var(--text-primary);
+#row3.np-size2 .sys-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 18px;
 }
 
 /* ── NOW PLAYING SIZE 3 — HALF SCREEN ────────────────────────── */

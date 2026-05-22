@@ -175,13 +175,13 @@ const NowPlaying = (() => {
   }
 
   function updatePillShuffleBtn() {
-    const btn = document.getElementById('pill-shuffle');
+    const btn = document.getElementById('np-shuffle');
     if (!btn) return;
     btn.style.color = shuffleState ? 'var(--accent-orange, #ff9500)' : '';
   }
 
   function updatePillRepeatBtn() {
-    const btn = document.getElementById('pill-repeat');
+    const btn = document.getElementById('np-repeat');
     if (!btn) return;
     if (repeatState === 'off') {
       btn.style.color = '';
@@ -294,32 +294,40 @@ const NowPlaying = (() => {
     if (expandedEl) expandedEl.classList.remove('visible');
     pillTitle.classList.add('pill__title--playing');
 
-    // Inject shuffle + repeat buttons into pill controls (once only)
-    const controls = pill.querySelector('.pill__controls');
-    if (controls && !document.getElementById('pill-shuffle')) {
-      const shuffleBtn = document.createElement('button');
-      shuffleBtn.className = 'pill__btn';
-      shuffleBtn.id = 'pill-shuffle';
-      shuffleBtn.innerHTML = '<i data-lucide="shuffle" class="icon icon--sm"></i>';
-      controls.insertBefore(shuffleBtn, controls.firstChild);
+    // Build center controls wrapper (once — CSS shows/hides it with np-size2 class)
+    if (!document.getElementById('np-center-controls')) {
+      const center = document.createElement('div');
+      center.id = 'np-center-controls';
+      center.innerHTML = `
+        <button class="pill__btn" id="np-shuffle"><i data-lucide="shuffle" class="icon icon--sm"></i></button>
+        <button class="pill__btn" id="np-prev"><i data-lucide="skip-back" class="icon icon--sm"></i></button>
+        <button class="pill__btn" id="np-pp"><i data-lucide="${isPlaying ? 'pause' : 'play'}" class="icon icon--sm"></i></button>
+        <button class="pill__btn" id="np-next"><i data-lucide="skip-forward" class="icon icon--sm"></i></button>
+        <button class="pill__btn" id="np-repeat"><i data-lucide="repeat" class="icon icon--sm"></i></button>
+      `;
+      row3.appendChild(center);
 
-      const repeatBtn = document.createElement('button');
-      repeatBtn.className = 'pill__btn';
-      repeatBtn.id = 'pill-repeat';
-      repeatBtn.innerHTML = '<i data-lucide="repeat" class="icon icon--sm"></i>';
-      controls.appendChild(repeatBtn);
-
-      shuffleBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        Haptics.tap();
+      center.querySelector('#np-pp').addEventListener('click', (e) => {
+        e.stopPropagation(); Haptics.tap();
+        WS.send({ panel: 'spotify', action: 'play_pause' });
+      });
+      center.querySelector('#np-prev').addEventListener('click', (e) => {
+        e.stopPropagation(); Haptics.tap();
+        WS.send({ panel: 'spotify', action: 'prev_track' });
+      });
+      center.querySelector('#np-next').addEventListener('click', (e) => {
+        e.stopPropagation(); Haptics.tap();
+        WS.send({ panel: 'spotify', action: 'next_track' });
+      });
+      center.querySelector('#np-shuffle').addEventListener('click', (e) => {
+        e.stopPropagation(); Haptics.tap();
         shuffleState = !shuffleState;
         updatePillShuffleBtn();
         updateShuffleBtn();
         WS.send({ panel: 'spotify', action: 'shuffle' });
       });
-      repeatBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        Haptics.tap();
+      center.querySelector('#np-repeat').addEventListener('click', (e) => {
+        e.stopPropagation(); Haptics.tap();
         const states = { 'off': 'context', 'context': 'track', 'track': 'off' };
         repeatState = states[repeatState] || 'off';
         updatePillRepeatBtn();
@@ -358,10 +366,15 @@ const NowPlaying = (() => {
   }
 
   function collapse() {
-    if (currentSize === 3) {
-      expandedEl.classList.remove('visible');
-      setTimeout(() => currentSize = 2, 300);
-    }
+    if (currentSize !== 3 || !expandedEl) return;
+    expandedEl.style.transition    = 'transform 300ms ease, opacity 300ms ease';
+    expandedEl.style.transform     = 'translateY(100%)';
+    expandedEl.style.opacity       = '0';
+    expandedEl.style.pointerEvents = 'none';
+    setTimeout(() => {
+      if (expandedEl) { expandedEl.remove(); expandedEl = null; }
+      currentSize = 2;
+    }, 300);
   }
 
   function exitFullscreen() {
@@ -435,11 +448,12 @@ const NowPlaying = (() => {
     pillTitle.textContent = track.name;
     pillTitle.classList.add('pill__title--playing');
 
+    const icon = `<i data-lucide="${isPlaying ? 'pause' : 'play'}" class="icon icon--sm"></i>`;
     const pillPP = document.getElementById('pill-pp');
-    if (pillPP) {
-      pillPP.innerHTML = `<i data-lucide="${isPlaying ? 'pause' : 'play'}" class="icon icon--sm"></i>`;
-      if (window.lucide) window.lucide.createIcons();
-    }
+    if (pillPP) pillPP.innerHTML = icon;
+    const npPP = document.getElementById('np-pp');
+    if (npPP) npPP.innerHTML = icon;
+    if ((pillPP || npPP) && window.lucide) window.lucide.createIcons();
 
     if (track.album_art) {
       pillArt.innerHTML = `<img src="${track.album_art}" crossorigin="anonymous" alt="" />`;
