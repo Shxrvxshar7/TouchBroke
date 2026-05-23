@@ -36,7 +36,7 @@ export class WordPanel {
       <div class="btn-group">
         <button class="fmt-btn fmt-btn--wide" data-action="heading1">H1</button>
         <button class="fmt-btn fmt-btn--wide" data-action="heading2">H2</button>
-        <button class="fmt-btn fmt-btn--wide" data-action="normal">¶</button>
+        <button class="fmt-btn fmt-btn--wide" data-action="bullet_list">• List</button>
       </div>
       <div class="btn-group-sep"></div>
       <div class="btn-group">

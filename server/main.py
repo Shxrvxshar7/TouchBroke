@@ -52,10 +52,10 @@ def start_http_server():
 
 
 # ── APP DETECTOR ──────────────────────────────────────────────
-def start_app_detector():
+def start_app_detector(loop):
     from app_detector import AppDetector
     detector = AppDetector()
-    detector.start()
+    detector.start(loop)
 
 
 # ── STARTUP BANNER ────────────────────────────────────────────
@@ -102,9 +102,12 @@ async def main():
     )
     http_thread.start()
 
+    main_loop = asyncio.get_event_loop()
+
     # Start app detector in background thread
     detector_thread = threading.Thread(
         target=start_app_detector,
+        args=(main_loop,),
         daemon=True
     )
     detector_thread.start()
@@ -120,7 +123,6 @@ async def main():
     # Runs as asyncio background task
     asyncio.create_task(start_spotify_polling())
 
-    main_loop = asyncio.get_event_loop()
     keyboard_thread = threading.Thread(
         target=start_keyboard_watcher,
         args=(main_loop,),

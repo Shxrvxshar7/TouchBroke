@@ -10,6 +10,10 @@ import threading
 
 log = logging.getLogger("TouchBroke")
 
+# Last-sent data — used to re-sync the phone on reconnect
+_last_tabs     = None
+_last_open_apps = None
+
 # ── APP MAPPINGS ──────────────────────────────────────────────
 # Maps Windows process names to Touch Bar panel names.
 # Process names are case-insensitive — we .lower() them first.
@@ -99,11 +103,81 @@ class AppDetector:
         except Exception:
             return "chrome"
 
+    # Apps that show a tab strip on the phone
+    BROWSER_APPS = {"chrome", "youtube", "canva", "whatsapp"}
+
+    # Human-readable labels for the app switcher
+    _APP_LABELS = {
+        "spotify":    "Spotify",
+        "word":       "Word",
+        "excel":      "Excel",
+        "powerpoint": "PowerPoint",
+        "chrome":     "Chrome",
+        "vscode":     "VS Code",
+        "photoshop":  "Photoshop",
+    }
+
+    # ── GET CURRENT TAB TITLE ─────────────────────────────────
+    def _get_tab_title(self):
+        try:
+            import win32gui
+            title = win32gui.GetWindowText(win32gui.GetForegroundWindow())
+            for suffix in (" - Google Chrome", " - Microsoft Edge", " - Mozilla Firefox"):
+                if title.endswith(suffix):
+                    return title[:-len(suffix)]
+            return title or "Current Tab"
+        except Exception:
+            return "Current Tab"
+
+    # ── GET OPEN APPS ─────────────────────────────────────────
+    # Enumerates visible top-level windows and maps them to panel names.
+    def get_open_apps(self):
+        try:
+            import win32gui
+            import win32process
+            import psutil
+
+            seen_panels = set()
+            result = [{"name": "default", "label": "Home"}]
+
+            def _cb(hwnd, _):
+                if not win32gui.IsWindowVisible(hwnd):
+                    return
+                if not win32gui.GetWindowText(hwnd).strip():
+                    return
+                try:
+                    _, pid = win32process.GetWindowThreadProcessId(hwnd)
+                    if not pid:
+                        return
+                    exe = psutil.Process(pid).name().lower()
+                    if exe in IGNORED_PROCESSES:
+                        return
+                    panel = APP_MAP.get(exe)
+                    if not panel or panel in seen_panels:
+                        return
+                    if panel in ("explorer", "default", "photoshop"):
+                        return
+                    seen_panels.add(panel)
+                    result.append({
+                        "name":  panel,
+                        "label": self._APP_LABELS.get(panel, panel.title()),
+                    })
+                except Exception as e:
+                    log.debug(f"get_open_apps window skip: {e}")
+
+            win32gui.EnumWindows(_cb, None)
+            return result
+
+        except Exception as e:
+            log.debug(f"get_open_apps error: {e}")
+            return [{"name": "default", "label": "Home"}]
+
     # ── DETECTION LOOP ────────────────────────────────────────
     # Runs in a background thread every 500ms.
     # When app changes — sends event to phone via WebSocket.
     def _loop(self):
         log.info("✓ App detector running")
+        tab_tick = 0
 
         while True:
             try:
@@ -113,17 +187,34 @@ class AppDetector:
                 if app == "chrome":
                     app = self.get_chrome_context()
 
-                # Only send if app actually changed
-                if app and app != self.current_app:
+                app_changed = bool(app and app != self.current_app)
+
+                # Only send app_change if app actually changed
+                if app_changed:
                     self.current_app = app
                     log.info(f"App changed → {app}")
 
-                    # Send to phone — must run in asyncio event loop
                     if self.loop and self.loop.is_running():
                         asyncio.run_coroutine_threadsafe(
                             self._send_app_change(app),
                             self.loop
                         )
+                    tab_tick = 0  # reset so tabs fire immediately on browser switch
+
+                # Every 2s (4 ticks): send current tab title if browser is active,
+                # and send the list of open apps regardless of active app.
+                if tab_tick % 4 == 0 and self.loop and self.loop.is_running():
+                    if app in self.BROWSER_APPS:
+                        asyncio.run_coroutine_threadsafe(
+                            self._send_tabs(),
+                            self.loop
+                        )
+                    asyncio.run_coroutine_threadsafe(
+                        self._send_open_apps(),
+                        self.loop
+                    )
+
+                tab_tick += 1
 
             except Exception as e:
                 log.debug(f"Detector loop error: {e}")
@@ -138,16 +229,30 @@ class AppDetector:
             "app":   app
         })
 
-    # ── START ─────────────────────────────────────────────────
-    def start(self):
-        # Get reference to the running asyncio loop
-        # so we can schedule coroutines from the thread
-        try:
-            self.loop = asyncio.get_event_loop()
-        except RuntimeError:
-            self.loop = asyncio.new_event_loop()
+    # ── SEND TABS ─────────────────────────────────────────────
+    async def _send_tabs(self):
+        global _last_tabs
+        from websocket_server import send_to_phone
+        title = self._get_tab_title()
+        _last_tabs = [{"title": title, "favicon": "🌐", "index": 0, "active": True}]
+        await send_to_phone({"event": "tabs", "tabs": _last_tabs})
 
-        # Run detection loop in this thread (called from daemon thread in main.py)
+    # ── SEND OPEN APPS ────────────────────────────────────────
+    async def _send_open_apps(self):
+        global _last_open_apps
+        from websocket_server import send_to_phone
+        apps = self.get_open_apps()
+        _last_open_apps = apps
+        log.debug(f"Sending open apps: {apps}")
+        await send_to_phone({"event": "open_apps", "apps": apps})
+
+    # ── START ─────────────────────────────────────────────────
+    def start(self, loop=None):
+        # Use the passed-in loop (the main asyncio loop from main.py).
+        # Falling back to get_event_loop() from a background thread returns a
+        # new non-running loop in Python 3.10+, so run_coroutine_threadsafe
+        # would silently never deliver messages.
+        self.loop = loop
         self._loop()
 
 
@@ -186,7 +291,6 @@ class KeyboardWatcher:
                 self._send(self.current)
             elif len(key) == 1 and key.isprintable():
                 self.current += key
-                print(f"[kbd] {self.current}", flush=True)
                 self._send(self.current)
         except Exception as e:
             log.debug(f"_on_key error: {e}")

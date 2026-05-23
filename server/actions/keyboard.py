@@ -16,7 +16,7 @@ SHORTCUTS = {
     "bold":          ("ctrl", "b"),
     "italic":        ("ctrl", "i"),
     "underline":     ("ctrl", "u"),
-    "strikethrough": ("ctrl", "5"),
+    # strikethrough handled as a special case below (ribbon sequence Alt+H, 4)
 
     # Clipboard
     "copy":          ("ctrl", "c"),
@@ -34,10 +34,11 @@ SHORTCUTS = {
     "align_right":   ("ctrl", "r"),
     "align_justify": ("ctrl", "j"),
 
-    # Headings (Word)
+    # Headings / paragraph styles (Word)
     "heading1":      ("ctrl", "alt", "1"),
     "heading2":      ("ctrl", "alt", "2"),
     "normal":        ("ctrl", "alt", "0"),
+    "bullet_list":   ("ctrl", "shift", "l"),
 
     # Chrome navigation
     "back":          ("alt", "left"),
@@ -96,13 +97,17 @@ def handle_keyboard(action, value=None):
             pyautogui.hotkey("ctrl", str(idx))
         return
 
-    # Open URL — just paste it into address bar
+    # Strikethrough — Word ribbon sequence: Alt+H then 4
+    if action == "strikethrough":
+        pyautogui.hotkey("alt", "h")
+        time.sleep(0.05)
+        pyautogui.press("4")
+        return
+
+    # Open URL — use webbrowser so no window-focus dependency
     if action == "open_url" and value:
-        pyautogui.hotkey("ctrl", "l")
-        time.sleep(0.1)
-        pyperclip.copy(value)
-        pyautogui.hotkey("ctrl", "v")
-        pyautogui.press("enter")
+        import webbrowser
+        webbrowser.open_new_tab(value)
         return
 
     # Goto slide

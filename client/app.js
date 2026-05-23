@@ -19,14 +19,20 @@ import { DefaultPanel }   from './panels/default.js';
 // ── APP STATE ───────────────────────────────────────────────────
 // One single object holds all state — simple and easy to debug
 const AppState = {
-  activeApp:    'default',
-  isConnected:  false,
-  volume:       50,
-  brightness:   50,
-  isMuted:      false,
-  nowPlaying:   null,
-  activePanel:  null,
+  activeApp:        'default',
+  isConnected:      false,
+  volume:           50,
+  brightness:       50,
+  isMuted:          false,
+  nowPlaying:       null,
+  activePanel:      null,
+  openApps:         [],   // live list of open Windows apps from server
+  lastTabs:         null, // most-recently-received tab data for Chrome panel
+  manualSwitchTime: 0,    // timestamp of last manual panel switch — suppresses auto-detection
 };
+
+// Expose for DevTools debugging: window.AppState.openApps, etc.
+window.AppState = AppState;
 
 // ── PANEL MAP ───────────────────────────────────────────────────
 // Maps app name (sent from Python) to its panel class
@@ -159,7 +165,9 @@ function handleServerMessage(data) {
       break;
 
     case 'app_change':
-      // Laptop detected a new active app — swap the panel
+      console.log('[app_change] received:', data.app);
+      // Ignore auto-detection for 3s after a manual switch from the app switcher
+      if (Date.now() - AppState.manualSwitchTime < 3000) break;
       switchApp(data.app);
       break;
 
@@ -180,10 +188,15 @@ function handleServerMessage(data) {
       SliderWell.syncValue('brightness', data.value);
       break;
 
+    case 'open_apps':
+      AppState.openApps = data.apps || [];
+      console.log('open_apps received:', JSON.stringify(data.apps));
+      break;
+
     case 'tabs':
-      // Chrome sent tab list — pass to chrome panel
-      if (AppState.activeApp === 'chrome' || AppState.activeApp === 'youtube') {
-        ChromePanel.updateTabs(data.tabs);
+      AppState.lastTabs = data.tabs;
+      if (AppState.activePanel && typeof AppState.activePanel.updateTabs === 'function') {
+        AppState.activePanel.updateTabs(data.tabs);
       }
       break;
 
@@ -208,8 +221,10 @@ function handleServerMessage(data) {
 
 // ── SWITCH APP ───────────────────────────────────────────────────
 // Called when laptop detects a new foreground app
-function switchApp(appName) {
-  if (appName === AppState.activeApp) return; // no change
+function switchApp(appName, force = false) {
+  console.log(`[switchApp] app=${appName} active=${AppState.activeApp} force=${force}`);
+  if (appName === AppState.activeApp && !force) return;
+  if (force) AppState.manualSwitchTime = Date.now();
 
   AppState.activeApp = appName;
 
@@ -242,6 +257,17 @@ function loadPanel(appName) {
 
     AppState.activePanel.mount();
 
+    // Sync cached state into panels that need it immediately on mount
+    if (appName === 'spotify' && AppState.nowPlaying) {
+      NowPlaying.update(AppState.nowPlaying);
+      const lyric = document.getElementById('spotify-lyric');
+      if (lyric) lyric.textContent = AppState.nowPlaying.name || '♪ Now Playing';
+    }
+    // Push last-received tabs into Chrome panel before the "Loading tabs..." flash
+    if (AppState.lastTabs && typeof AppState.activePanel.updateTabs === 'function') {
+      AppState.activePanel.updateTabs(AppState.lastTabs);
+    }
+
     // Always show word suggestions in Row 1
     // unless the panel has its own Row 1 content
     if (!DOM.row1Center.hasChildNodes()) {
@@ -269,15 +295,10 @@ function showAppSwitcher() {
   const existing = document.getElementById('app-switcher');
   if (existing) { existing.remove(); return; }
 
-  const apps = [
-    { id: 'default',     icon: 'layout-grid', label: 'Default'  },
-    { id: 'spotify',     icon: 'music',        label: 'Spotify'  },
-    { id: 'chrome',      icon: 'globe',        label: 'Chrome'   },
-    { id: 'word',        icon: 'file-text',    label: 'Word'     },
-    { id: 'excel',       icon: 'table',        label: 'Excel'    },
-    { id: 'powerpoint',  icon: 'presentation', label: 'PPT'      },
-    { id: 'vscode',      icon: 'code-2',       label: 'VSCode'   },
-  ];
+  // Use live open-app list from server; fall back to just Home if not yet received
+  const apps = AppState.openApps.length > 0
+    ? AppState.openApps
+    : [{ name: 'default', label: 'Home' }];
 
   const switcher = document.createElement('div');
   switcher.id = 'app-switcher';
@@ -296,38 +317,69 @@ function showAppSwitcher() {
     overflow-x: auto;
   `;
 
+  // Build buttons with data attributes — NO event listeners yet.
+  // Listeners are attached after 200ms so the long-press touchend that
+  // opened the switcher can't accidentally fire a button immediately.
   apps.forEach(app => {
     const btn = document.createElement('button');
-    btn.className = `tb-btn tb-btn--icon-only${AppState.activeApp === app.id ? ' tb-btn--active' : ''}`;
+    btn.className = `tb-btn tb-btn--icon-only${AppState.activeApp === app.name ? ' tb-btn--active' : ''}`;
     btn.style.cssText = 'flex-direction:column;gap:4px;height:72px;min-width:64px;font-size:10px;';
+    btn.dataset.app   = app.name;
+    btn.dataset.label = app.label;
+    const iconName = APP_ICONS[app.name] || 'layout-grid';
     btn.innerHTML = `
-      <i data-lucide="${app.icon}" class="icon"></i>
+      <i data-lucide="${iconName}" class="icon"></i>
       <span>${app.label}</span>
     `;
-    btn.addEventListener('click', () => {
-      Haptics.tap();
-      switchApp(app.id);
-      switcher.remove();
-    });
     switcher.appendChild(btn);
   });
 
-  // Tap outside to close
+  // Tap outside to close — only remove if the touch target is outside the switcher
   setTimeout(() => {
-    document.addEventListener('touchstart', () => switcher.remove(), { once: true, passive: true });
+    document.addEventListener('touchstart', (e) => {
+      if (!switcher.contains(e.target)) switcher.remove();
+    }, { once: true, passive: true });
   }, 100);
 
   document.getElementById('touchbar').appendChild(switcher);
   initLucide();
+
+  // Attach touchend listeners after 200ms — long-press touchend has resolved by then
+  setTimeout(() => {
+    switcher.querySelectorAll('button').forEach(btn => {
+      btn.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const appName = btn.dataset.app;
+        console.log('[switcher] tapped:', appName);
+        Haptics.tap();
+        switchApp(appName, true);
+        setTimeout(() => switcher.remove(), 150);
+      });
+    });
+  }, 200);
 }
 
 // ── SYSTEM BUTTONS ───────────────────────────────────────────────
 function initSystemButtons() {
 
-  // App icon badge — tap to show manual panel switcher
+  // App icon — tap = Home (reload default panel), long press = app switcher
+  let appIconLongPressTimer;
+  let appIconSuppressClick = false;
+  DOM.appIcon.addEventListener('touchstart', () => {
+    appIconSuppressClick = false;
+    appIconLongPressTimer = setTimeout(() => {
+      appIconSuppressClick = true;
+      Haptics.success();
+      showAppSwitcher();
+    }, 600);
+  }, { passive: true });
+  DOM.appIcon.addEventListener('touchend',  () => clearTimeout(appIconLongPressTimer), { passive: true });
+  DOM.appIcon.addEventListener('touchmove', () => clearTimeout(appIconLongPressTimer), { passive: true });
   DOM.appIcon.addEventListener('click', () => {
+    if (appIconSuppressClick) { appIconSuppressClick = false; return; }
     Haptics.tap();
-    showAppSwitcher();
+    switchApp('default', true);
   });
 
   // Volume — tap opens slider well

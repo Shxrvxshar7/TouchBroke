@@ -140,6 +140,16 @@ async def handle_client(websocket):
     except Exception as e:
         log.debug(f"Sync error: {e}")
 
+    # Re-send cached state so the phone is in sync immediately on connect
+    try:
+        from app_detector import _last_tabs, _last_open_apps
+        if _last_open_apps is not None:
+            await send_to_phone({"event": "open_apps", "apps": _last_open_apps})
+        if _last_tabs is not None:
+            await send_to_phone({"event": "tabs", "tabs": _last_tabs})
+    except Exception as e:
+        log.debug(f"State resync error: {e}")
+
     try:
         # Keep listening for messages until connection closes
         async for raw_message in websocket:

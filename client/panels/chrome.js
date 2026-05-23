@@ -83,7 +83,7 @@ export class ChromePanel {
           c.classList.remove('tab-chip--active')
         );
         chip.classList.add('tab-chip--active');
-        this.send({ action: 'switch_tab', index: tab.index });
+        this.send({ action: 'switch_tab', value: tab.index });
       });
 
       // Long press to close tab
@@ -91,7 +91,7 @@ export class ChromePanel {
       chip.addEventListener('touchstart', () => {
         pressTimer = setTimeout(() => {
           chip.style.border = '1.5px solid var(--accent-red)';
-          this.send({ action: 'close_tab', index: tab.index });
+          this.send({ action: 'close_tab', value: tab.index });
           setTimeout(() => chip.remove(), 200);
         }, 600);
       }, { passive: true });
@@ -110,7 +110,7 @@ export class ChromePanel {
     // Bookmark chips
     this.row2.querySelectorAll('[data-url]').forEach(btn => {
       btn.addEventListener('click', () => {
-        this.send({ action: 'open_url', url: btn.dataset.url });
+        this.send({ action: 'open_url', value: btn.dataset.url });
       });
     });
   }
