@@ -1,23 +1,23 @@
 // ── WORD SUGGESTIONS ────────────────────────────────────────────
-// 3-layer suggestion engine:
-// Layer 1 — Her personal learned words (highest priority)
-// Layer 2 — Tanglish seed list
-// Layer 3 — English frequency dictionary
-// All stored/matched locally on phone — zero server round trip.
+// 5-layer suggestion engine:
+// Layer 0 — Trigram context  (prev2 + prev1 → next)
+// Layer 1 — Bigram context   (prev1 → next)
+// Layer 2 — Personal learned words (prefix match, frequency ordered)
+// Layer 3 — Tanglish seed list
+// Layer 4 — English frequency dictionary
 
 import { Haptics } from '../utils/haptics.js';
 import { WS }      from '../utils/websocket.js';
 
 const WordSuggestions = (() => {
 
-  // ── DOM REF ───────────────────────────────────────────────────
-  let container   = null;
-  let currentWord = '';
-  let isActive    = false;
+  // ── DOM / STATE ───────────────────────────────────────────────
+  let container      = null;
+  let currentWord    = '';
+  let lastTypedWord  = '';   // word completed just before current
+  let prevTypedWord  = '';   // word completed two slots back
 
-  // ── LAYER 3: ENGLISH DICTIONARY ───────────────────────────────
-  // Top 500 most frequently used English words, frequency ordered.
-  // Source: Oxford English Corpus frequency list.
+  // ── LAYER 4: ENGLISH DICTIONARY ───────────────────────────────
   const ENGLISH = [
     'the','be','to','of','and','a','in','that','have','it','for','not',
     'on','with','he','as','you','do','at','this','but','his','by','from',
@@ -93,188 +93,226 @@ const WordSuggestions = (() => {
     'buying','selling','giving','taking','making','doing','saying','asking',
   ];
 
-  // ── LAYER 2: TANGLISH SEED LIST ───────────────────────────────
-  // 150 most common Tanglish words — how Tamil is typed in English letters.
-  // These cover everyday conversation, texting, and informal writing.
+  // ── LAYER 3: TANGLISH SEED LIST ───────────────────────────────
   const TANGLISH = [
-    // Responses & affirmations
     'seri','aamaa','illa','illai','maybe','sollu','solla','soldren',
     'theriyum','theriyala','puriyuthu','puriyala','okay','otay',
-    // People
     'naan','nee','avan','aval','naanga','nenga','avanga','yaar',
     'akka','anna','amma','appa','thatha','paati','machan','macha',
     'da','di','bro','pa','ma','tambi','thambi','nanban','nanbi',
-    // Questions
     'enna','yenna','eppadi','epdi','enge','engey','eppo','eppove',
     'yaaru','yaar','yen','yennapa','yennama','yennada','yennadi',
-    // Common verbs
     'vaa','vaayen','poi','poyen','paren','paaru','sollu','kelu',
     'varuven','varuva','povom','palam','sollren','ketren','parkiren',
     'pannren','pannuven','irukken','iruken','vandhen','vanden',
     'sollunga','parunga','vaanga','poonga','pannunga','kelunga',
-    // Emotions & reactions
     'romba','konjam','nalla','nallaa','super','kalakkal','semma',
     'mokka','kaduppu','pavam','azhaga','azhagaa','happy','santhosham',
     'kavalai','tension','bore','mosam','waste','mass','patta',
-    // Common expressions
-    'sappa','thappa','correct','exact','true','poi','uண்மை',
+    'sappa','thappa','correct','exact','true',
     'kandippa','definitely','pochu','achu','mudinju','mudinjuchu',
     'varuma','varuva','povana','povan','solluva','solluvan',
-    // Frequently typed phrases (stored as single words for prefix matching)
     'nandri','thanks','vanakkam','welcome','saptiya','sapten',
     'thinren','kudikiren','tidren','padikiren','thoonguren',
     'velaikku','veetuku','schoolku','collegeku','friendsku',
-    // Time expressions
     'ippo','ippove','appo','appove','naalaiku','naalai','nethu',
     'mundha','munnadi','pinna','pinnadi','morning','evening',
-    // Intensifiers
     'romba','oru','rendu','moonu','naalu','ainjy','aaru',
     'vera','vere','mattum','kuda','ellam','yellam','onnum',
-    // Common nouns
     'veedu','veetu','ooru','ur','kadai','kadaikku','school',
     'college','office','hospital','kovil','park','road','bus',
     'train','auto','bike','car','phone','laptop','panam','money',
-    // Connectors
     'aana','aanaa','aprum','aprm','athuku','aduku','ingey','inge',
     'ange','angey','yengey','inniku','inniki','indha','antha',
   ];
 
-  // ── LAYER 1: PERSONAL LEARNING ENGINE ────────────────────────
-  // Stores words she types + frequency in localStorage.
-  // Her personal words always show up first in suggestions.
-
+  // ── LAYER 2: PERSONAL WORD FREQUENCY ─────────────────────────
   const PERSONAL_KEY = 'tb_personal_words';
 
   function getPersonalWords() {
-    try {
-      return JSON.parse(localStorage.getItem(PERSONAL_KEY) || '{}');
-    } catch { return {}; }
+    try { return JSON.parse(localStorage.getItem(PERSONAL_KEY) || '{}'); }
+    catch { return {}; }
   }
 
   function recordWord(word) {
     if (!word || word.length < 2) return;
-    const words = getPersonalWords();
-    words[word.toLowerCase()] = (words[word.toLowerCase()] || 0) + 1;
-    localStorage.setItem(PERSONAL_KEY, JSON.stringify(words));
+    const store = getPersonalWords();
+    const w = word.toLowerCase();
+    store[w] = (store[w] || 0) + 1;
+    localStorage.setItem(PERSONAL_KEY, JSON.stringify(store));
   }
 
   function getPersonalSuggestions(prefix) {
-    const words   = getPersonalWords();
-    const lower   = prefix.toLowerCase();
-    return Object.entries(words)
+    const lower = prefix.toLowerCase();
+    return Object.entries(getPersonalWords())
       .filter(([w]) => w.startsWith(lower) && w !== lower)
-      .sort((a, b) => b[1] - a[1])   // sort by frequency descending
+      .sort((a, b) => b[1] - a[1])
       .slice(0, 5)
       .map(([w]) => w);
   }
 
+  // ── LAYER 0+1: BIGRAMS & TRIGRAMS ────────────────────────────
+  const BIGRAMS_KEY  = 'tb_bigrams';
+  const TRIGRAMS_KEY = 'tb_trigrams';
+
+  function getBigrams()  {
+    try { return JSON.parse(localStorage.getItem(BIGRAMS_KEY)  || '{}'); }
+    catch { return {}; }
+  }
+  function getTrigrams() {
+    try { return JSON.parse(localStorage.getItem(TRIGRAMS_KEY) || '{}'); }
+    catch { return {}; }
+  }
+
+  function recordBigram(prev, next) {
+    if (!prev || !next || next.length < 2) return;
+    const store = getBigrams();
+    const key = prev.toLowerCase() + '→' + next.toLowerCase();
+    store[key] = (store[key] || 0) + 1;
+    localStorage.setItem(BIGRAMS_KEY, JSON.stringify(store));
+  }
+
+  function recordTrigram(prev2, prev1, next) {
+    if (!prev2 || !prev1 || !next || next.length < 2) return;
+    const store = getTrigrams();
+    const key = prev2.toLowerCase() + ' ' + prev1.toLowerCase() + '→' + next.toLowerCase();
+    store[key] = (store[key] || 0) + 1;
+    localStorage.setItem(TRIGRAMS_KEY, JSON.stringify(store));
+  }
+
+  function getBigramSuggestions(lastWord) {
+    if (!lastWord) return [];
+    const prefix = lastWord.toLowerCase() + '→';
+    return Object.entries(getBigrams())
+      .filter(([k]) => k.startsWith(prefix))
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([k]) => k.slice(prefix.length));
+  }
+
+  function getTrigramSuggestions(prev2, prev1) {
+    if (!prev2 || !prev1) return [];
+    const prefix = prev2.toLowerCase() + ' ' + prev1.toLowerCase() + '→';
+    return Object.entries(getTrigrams())
+      .filter(([k]) => k.startsWith(prefix))
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([k]) => k.slice(prefix.length));
+  }
+
   // ── SUGGESTION ENGINE ─────────────────────────────────────────
-  // Combines all 3 layers — personal first, then Tanglish, then English
   function getSuggestions(prefix) {
-    if (!prefix || prefix.length < 1) return [];
+    const seen    = new Set();
+    const results = [];
+    const lower   = prefix.toLowerCase();
 
-    const lower    = prefix.toLowerCase();
-    const seen     = new Set();
-    const results  = [];
-
-    // Helper — add word if not already in results
     function add(word) {
-      if (!seen.has(word) && word !== lower && results.length < 3) {
-        seen.add(word);
+      const w = word.toLowerCase();
+      if (!seen.has(w) && w !== lower && results.length < 5) {
+        seen.add(w);
         results.push(word);
       }
     }
 
-    // Layer 1 — personal learned words (highest priority)
-    getPersonalSuggestions(lower).forEach(add);
+    if (!prefix || prefix.length === 0) {
+      // Next-word prediction — context-driven
+      getTrigramSuggestions(prevTypedWord, lastTypedWord).forEach(add);
+      getBigramSuggestions(lastTypedWord).forEach(add);
+      getPersonalSuggestions('').forEach(add);
+      // Fill remaining slots with common defaults
+      ['okay','seri','nalla','thanks','sure'].forEach(add);
+    } else {
+      // Prefix completion — priority: trigram → bigram → personal → Tanglish → English
+      getTrigramSuggestions(prevTypedWord, lastTypedWord)
+        .filter(w => w.startsWith(lower)).forEach(add);
+      getBigramSuggestions(lastTypedWord)
+        .filter(w => w.startsWith(lower)).forEach(add);
+      getPersonalSuggestions(lower).forEach(add);
+      TANGLISH.filter(w => w.startsWith(lower)).forEach(add);
+      ENGLISH.filter(w  => w.startsWith(lower)).forEach(add);
+    }
 
-    // Layer 2 — Tanglish seed list
-    TANGLISH.filter(w => w.startsWith(lower)).forEach(add);
-
-    // Layer 3 — English dictionary
-    ENGLISH.filter(w => w.startsWith(lower)).forEach(add);
-
-    return results.slice(0, 3);
+    // Always return exactly 5 slots so renderChips never gets fewer
+    while (results.length < 5) results.push('');
+    return results.slice(0, 5);
   }
 
   // ── RENDER CHIPS ─────────────────────────────────────────────
   function renderChips(suggestions) {
     if (!container) return;
-    container.innerHTML = '';
 
-    if (suggestions.length === 0) return;
+    // Get or create the .suggestions flex wrapper inside #row1-center.
+    // This is what the CSS targets — chips must live inside it.
+    let wrapper = container.querySelector('.suggestions');
+    if (!wrapper) {
+      wrapper = document.createElement('div');
+      wrapper.className = 'suggestions';
+      container.innerHTML = '';
+      container.appendChild(wrapper);
+    }
+    wrapper.innerHTML = '';
 
-    suggestions.forEach((word, index) => {
+    // Always exactly 5 slots — pad with empty strings so layout never collapses
+    const slots = Array.from({ length: 5 }, (_, i) => suggestions[i] || '');
+
+    slots.forEach((word, index) => {
       const chip = document.createElement('button');
       chip.className = 'suggestion-chip';
 
-      // Middle chip is primary
-      if (index === 1 || (suggestions.length === 1 && index === 0)) {
-        chip.classList.add('suggestion-chip--primary');
+      if (!word) {
+        // Invisible placeholder — holds space, never interactive
+        chip.disabled = true;
+        chip.style.opacity       = '0';
+        chip.style.pointerEvents = 'none';
+        chip.setAttribute('aria-hidden', 'true');
+        wrapper.appendChild(chip);
+        return;
       }
+
+      // Index 2 = primary (center); 0,1,3,4 = alternatives
+      if (index === 2) chip.classList.add('suggestion-chip--primary');
 
       chip.textContent = word;
 
       chip.addEventListener('click', () => {
         Haptics.tap();
-
-        // Record this word to personal learning
         recordWord(word);
+        recordBigram(lastTypedWord, word);
+        recordTrigram(prevTypedWord, lastTypedWord, word);
 
-        // Send to laptop
-        WS.send({
-          panel:  'typing',
-          action: 'suggestion',
-          word:   word,
-          prefix: currentWord,
-        });
+        prevTypedWord = lastTypedWord;
+        lastTypedWord = word.toLowerCase();
 
-        container.innerHTML = '';
+        WS.send({ panel: 'typing', action: 'suggestion', word, prefix: currentWord });
+
         currentWord = '';
+        renderChips(getSuggestions(''));
       });
 
-      container.appendChild(chip);
+      wrapper.appendChild(chip);
     });
   }
 
   // ── UPDATE ────────────────────────────────────────────────────
-  // Called from app.js when Python sends current typed word
+  // Called from app.js when Python sends current typed word.
+  // word === '' means the user hit space — a word was just completed.
   function update(word) {
+    const completedWord = currentWord; // capture before overwrite
     currentWord = word;
 
-    // Record every word she completes naturally (sent from Python
-    // when she hits space after a word)
-    if (word === '' && currentWord !== '') {
-      recordWord(currentWord);
+    if (word === '' && completedWord.length > 1) {
+      recordWord(completedWord);
+      prevTypedWord = lastTypedWord;
+      lastTypedWord = completedWord.toLowerCase();
     }
 
-    const suggestions = getSuggestions(word);
-    renderChips(suggestions);
+    renderChips(getSuggestions(word));
   }
 
   // ── SHOW DEFAULTS ─────────────────────────────────────────────
   function showDefaults() {
-    if (!container) return;
-    container.innerHTML = '';
-
-    // Show her most frequently used words as defaults
-    const personal = getPersonalSuggestions('');
-    const defaults = personal.length >= 3
-      ? personal.slice(0, 3)
-      : ['the', 'and', 'seri'];
-
-    defaults.forEach((word, index) => {
-      const chip = document.createElement('button');
-      chip.className = 'suggestion-chip';
-      if (index === 1) chip.classList.add('suggestion-chip--primary');
-      chip.textContent = word;
-      chip.addEventListener('click', () => {
-        Haptics.tap();
-        recordWord(word);
-        WS.send({ panel: 'typing', action: 'suggestion', word, prefix: '' });
-      });
-      container.appendChild(chip);
-    });
+    currentWord = '';
+    renderChips(getSuggestions(''));
   }
 
   // ── INIT ──────────────────────────────────────────────────────
@@ -283,11 +321,8 @@ const WordSuggestions = (() => {
     showDefaults();
   }
 
-  function activate()   { isActive = true; }
-  function deactivate() {
-    isActive = false;
-    showDefaults();
-  }
+  function activate()   {}
+  function deactivate() { showDefaults(); }
 
   return { init, update, activate, deactivate };
 
