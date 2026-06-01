@@ -48,7 +48,7 @@ const NowPlaying = (() => {
     expandedEl.innerHTML = `
       <div class="npe__row">
         <div class="npe__art" id="npe-art">
-          <img id="npe-art-img" src="" alt="Album art" crossorigin="anonymous" />
+          <img id="npe-art-img" src="" alt="Album art" />
         </div>
         <div class="npe__info">
           <div class="npe__title"  id="npe-title">-</div>
@@ -220,7 +220,7 @@ const NowPlaying = (() => {
         filter:blur(40px) brightness(0.35);
         transform:scale(1.1);
       "></div>
-      <img src="${artUrl}" crossorigin="anonymous"
+      <img src="${artUrl}"
         style="width:140px;height:140px;border-radius:14px;
                box-shadow:0 8px 32px rgba(0,0,0,0.6);position:relative;z-index:1;"
       />
@@ -351,6 +351,7 @@ const NowPlaying = (() => {
   }
 
   function setSize3() {
+    console.log('[NowPlaying] setSize3 called, currentSize was', currentSize);
     currentSize = 3;
     buildExpanded();
     expandedEl.style.transition = 'none';
@@ -456,7 +457,7 @@ const NowPlaying = (() => {
     if ((pillPP || npPP) && window.lucide) window.lucide.createIcons();
 
     if (track.album_art) {
-      pillArt.innerHTML = `<img src="${track.album_art}" crossorigin="anonymous" alt="" />`;
+      pillArt.innerHTML = `<img src="${track.album_art}" alt="" />`;
     }
 
     // ── Upgrade to size 2 if currently size 1 ───────────────
